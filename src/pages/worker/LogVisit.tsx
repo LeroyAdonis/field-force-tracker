@@ -68,6 +68,30 @@ export default function LogVisit() {
     toast.success("Site added", { description: s.name });
   };
 
+  const handleFiles = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    const remaining = MAX_PHOTOS - photos.length;
+    if (remaining <= 0) { toast.error(`Max ${MAX_PHOTOS} photos per visit`); return; }
+    const slice = Array.from(files).slice(0, remaining);
+    try {
+      const next: { dataUrl: string }[] = [];
+      for (const f of slice) {
+        if (!f.type.startsWith("image/")) continue;
+        next.push({ dataUrl: await fileToCompressedDataUrl(f) });
+      }
+      if (next.length) {
+        setPhotos(p => [...p, ...next]);
+        toast.success(`${next.length} photo${next.length > 1 ? "s" : ""} attached`);
+      }
+    } catch {
+      toast.error("Couldn't process image");
+    }
+  };
+
+  const removePhoto = (idx: number) => setPhotos(p => p.filter((_, i) => i !== idx));
+  const updateCaption = (idx: number, caption: string) =>
+    setPhotos(p => p.map((ph, i) => (i === idx ? { ...ph, caption } : ph)));
+
   return (
     <div className="max-w-2xl mx-auto space-y-6">
       <button onClick={() => navigate(-1)} className="inline-flex items-center gap-2 text-sm font-semibold text-foreground-muted hover:text-foreground">

@@ -1,12 +1,28 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { useApp } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, MapPin, Plus, Search, Check, FileText } from "lucide-react";
+import { ArrowLeft, MapPin, Plus, Search, Check, FileText, Camera, ImagePlus, X } from "lucide-react";
 import { toast } from "sonner";
 import { todayISO } from "@/lib/mock-data";
 
 const inspectionTypes = ["Structural Audit", "Safety Inspection", "Compliance Check", "Foundation Review", "Electrical Survey"];
+
+const MAX_PHOTOS = 6;
+const MAX_DIM = 1600; // px — downscale for storage sanity
+const JPEG_QUALITY = 0.82;
+
+async function fileToCompressedDataUrl(file: File): Promise<string> {
+  const bitmap = await createImageBitmap(file);
+  const scale = Math.min(1, MAX_DIM / Math.max(bitmap.width, bitmap.height));
+  const w = Math.round(bitmap.width * scale);
+  const h = Math.round(bitmap.height * scale);
+  const canvas = document.createElement("canvas");
+  canvas.width = w; canvas.height = h;
+  const ctx = canvas.getContext("2d")!;
+  ctx.drawImage(bitmap, 0, 0, w, h);
+  return canvas.toDataURL("image/jpeg", JPEG_QUALITY);
+}
 
 export default function LogVisit() {
   const { user, sites, addSite, addVisit } = useApp();

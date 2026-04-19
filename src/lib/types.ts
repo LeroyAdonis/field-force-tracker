@@ -20,12 +20,19 @@ export interface Worker {
   active: boolean;
 }
 
+export interface InspectionPhoto {
+  id: string;
+  dataUrl: string;       // base64 data URL (UI-only scaffold)
+  caption?: string;
+}
+
 export interface Inspection {
   id: string;
   visitId: string;
   type: string;          // e.g., "Structural Audit"
   notes: string;
   timestamp: string;     // ISO
+  photos?: InspectionPhoto[];
 }
 
 export interface Visit {

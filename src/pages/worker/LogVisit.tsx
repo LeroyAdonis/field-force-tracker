@@ -53,6 +53,7 @@ export default function LogVisit() {
     addVisit({
       workerId: user.id, siteId, date: todayISO, timestamp: new Date().toISOString(),
       km: kmNum, inspectionType: type, notes: notes.trim(),
+      photos: photos.length ? photos : undefined,
     });
     toast.success("Site visit logged", { description: "KPI progress updated." });
     navigate("/worker");

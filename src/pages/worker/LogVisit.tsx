@@ -34,6 +34,9 @@ export default function LogVisit() {
   const [km, setKm] = useState("");
   const [type, setType] = useState(inspectionTypes[0]);
   const [notes, setNotes] = useState("");
+  const [photos, setPhotos] = useState<{ dataUrl: string; caption?: string }[]>([]);
+  const cameraRef = useRef<HTMLInputElement>(null);
+  const galleryRef = useRef<HTMLInputElement>(null);
 
   const filtered = useMemo(() =>
     sites.filter(s => s.active && (s.name.toLowerCase().includes(query.toLowerCase()) || s.address.toLowerCase().includes(query.toLowerCase()))),

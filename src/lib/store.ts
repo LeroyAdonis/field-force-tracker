@@ -21,7 +21,7 @@ interface AppState {
   loginAs: (role: Role, workerId?: string) => void;
   logout: () => void;
 
-  addVisit: (v: Omit<Visit, "id" | "inspection"> & { inspectionType: string; notes: string }) => void;
+  addVisit: (v: Omit<Visit, "id" | "inspection"> & { inspectionType: string; notes: string; photos?: { dataUrl: string; caption?: string }[] }) => void;
   addSite: (s: Omit<Site, "id">) => Site;
   updateSite: (id: string, patch: Partial<Site>) => void;
   removeSite: (id: string) => void;

@@ -21,7 +21,7 @@ interface AppState {
   loginAs: (role: Role, workerId?: string) => void;
   logout: () => void;
 
-  addVisit: (v: Omit<Visit, "id" | "inspection"> & { inspectionType: string; notes: string }) => void;
+  addVisit: (v: Omit<Visit, "id" | "inspection"> & { inspectionType: string; notes: string; photos?: { dataUrl: string; caption?: string }[] }) => void;
   addSite: (s: Omit<Site, "id">) => Site;
   updateSite: (id: string, patch: Partial<Site>) => void;
   removeSite: (id: string) => void;
@@ -54,11 +54,14 @@ export const useApp = create<AppState>((set, get) => ({
   },
   logout: () => set({ user: null }),
 
-  addVisit: ({ workerId, siteId, date, timestamp, km, inspectionType, notes }) => {
+  addVisit: ({ workerId, siteId, date, timestamp, km, inspectionType, notes, photos }) => {
     const id = `v${Date.now()}`;
     const visit: Visit = {
       id, workerId, siteId, date, timestamp, km,
-      inspection: { id: `i${Date.now()}`, visitId: id, type: inspectionType, notes, timestamp },
+      inspection: {
+        id: `i${Date.now()}`, visitId: id, type: inspectionType, notes, timestamp,
+        photos: photos?.map((p, idx) => ({ id: `p${Date.now()}_${idx}`, dataUrl: p.dataUrl, caption: p.caption })),
+      },
     };
     set({ visits: [visit, ...get().visits] });
   },

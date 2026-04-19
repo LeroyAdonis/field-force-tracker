@@ -41,17 +41,36 @@ export default function VisitHistory() {
                 {items.map((v, i) => {
                   const site = sites.find(s => s.id === v.siteId);
                   const t = new Date(v.timestamp);
+                  const photos = v.inspection.photos ?? [];
                   return (
-                    <div key={v.id} className={`flex items-start gap-3 p-3 rounded-xl ${i % 2 ? "" : "bg-surface-low/40"}`}>
-                      <div className="text-xs text-foreground-muted tabular-nums w-12 shrink-0 mt-0.5">
-                        {String(t.getHours()).padStart(2, "0")}:{String(t.getMinutes()).padStart(2, "0")}
+                    <div key={v.id} className={`p-3 rounded-xl ${i % 2 ? "" : "bg-surface-low/40"}`}>
+                      <div className="flex items-start gap-3">
+                        <div className="text-xs text-foreground-muted tabular-nums w-12 shrink-0 mt-0.5">
+                          {String(t.getHours()).padStart(2, "0")}:{String(t.getMinutes()).padStart(2, "0")}
+                        </div>
+                        <MapPin className="h-4 w-4 text-foreground-muted shrink-0 mt-0.5" />
+                        <div className="flex-1 min-w-0">
+                          <div className="font-semibold text-sm">{site?.name ?? "Unknown site"}</div>
+                          <div className="text-xs text-foreground-muted truncate">{v.inspection.type} · {v.inspection.notes}</div>
+                        </div>
+                        <div className="text-xs font-bold tabular-nums shrink-0">{v.km} km</div>
                       </div>
-                      <MapPin className="h-4 w-4 text-foreground-muted shrink-0 mt-0.5" />
-                      <div className="flex-1 min-w-0">
-                        <div className="font-semibold text-sm">{site?.name ?? "Unknown site"}</div>
-                        <div className="text-xs text-foreground-muted truncate">{v.inspection.type} · {v.inspection.notes}</div>
-                      </div>
-                      <div className="text-xs font-bold tabular-nums shrink-0">{v.km} km</div>
+                      {photos.length > 0 && (
+                        <div className="mt-2 ml-[60px] flex gap-1.5 overflow-x-auto pb-1">
+                          {photos.map(p => (
+                            <a
+                              key={p.id}
+                              href={p.dataUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="h-16 w-16 shrink-0 rounded-lg overflow-hidden bg-surface-low ring-1 ring-border/50 hover:ring-primary/60 transition"
+                              title={p.caption || "Site photo"}
+                            >
+                              <img src={p.dataUrl} alt={p.caption || "Site photo"} className="h-full w-full object-cover" />
+                            </a>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   );
                 })}

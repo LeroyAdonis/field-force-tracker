@@ -1,12 +1,28 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { useApp } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, MapPin, Plus, Search, Check, FileText } from "lucide-react";
+import { ArrowLeft, MapPin, Plus, Search, Check, FileText, Camera, ImagePlus, X } from "lucide-react";
 import { toast } from "sonner";
 import { todayISO } from "@/lib/mock-data";
 
 const inspectionTypes = ["Structural Audit", "Safety Inspection", "Compliance Check", "Foundation Review", "Electrical Survey"];
+
+const MAX_PHOTOS = 6;
+const MAX_DIM = 1600; // px — downscale for storage sanity
+const JPEG_QUALITY = 0.82;
+
+async function fileToCompressedDataUrl(file: File): Promise<string> {
+  const bitmap = await createImageBitmap(file);
+  const scale = Math.min(1, MAX_DIM / Math.max(bitmap.width, bitmap.height));
+  const w = Math.round(bitmap.width * scale);
+  const h = Math.round(bitmap.height * scale);
+  const canvas = document.createElement("canvas");
+  canvas.width = w; canvas.height = h;
+  const ctx = canvas.getContext("2d")!;
+  ctx.drawImage(bitmap, 0, 0, w, h);
+  return canvas.toDataURL("image/jpeg", JPEG_QUALITY);
+}
 
 export default function LogVisit() {
   const { user, sites, addSite, addVisit } = useApp();
@@ -18,6 +34,9 @@ export default function LogVisit() {
   const [km, setKm] = useState("");
   const [type, setType] = useState(inspectionTypes[0]);
   const [notes, setNotes] = useState("");
+  const [photos, setPhotos] = useState<{ dataUrl: string; caption?: string }[]>([]);
+  const cameraRef = useRef<HTMLInputElement>(null);
+  const galleryRef = useRef<HTMLInputElement>(null);
 
   const filtered = useMemo(() =>
     sites.filter(s => s.active && (s.name.toLowerCase().includes(query.toLowerCase()) || s.address.toLowerCase().includes(query.toLowerCase()))),
@@ -34,6 +53,7 @@ export default function LogVisit() {
     addVisit({
       workerId: user.id, siteId, date: todayISO, timestamp: new Date().toISOString(),
       km: kmNum, inspectionType: type, notes: notes.trim(),
+      photos: photos.length ? photos : undefined,
     });
     toast.success("Site visit logged", { description: "KPI progress updated." });
     navigate("/worker");
@@ -47,6 +67,30 @@ export default function LogVisit() {
     setNewSite({ name: "", address: "", zone: "" });
     toast.success("Site added", { description: s.name });
   };
+
+  const handleFiles = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    const remaining = MAX_PHOTOS - photos.length;
+    if (remaining <= 0) { toast.error(`Max ${MAX_PHOTOS} photos per visit`); return; }
+    const slice = Array.from(files).slice(0, remaining);
+    try {
+      const next: { dataUrl: string }[] = [];
+      for (const f of slice) {
+        if (!f.type.startsWith("image/")) continue;
+        next.push({ dataUrl: await fileToCompressedDataUrl(f) });
+      }
+      if (next.length) {
+        setPhotos(p => [...p, ...next]);
+        toast.success(`${next.length} photo${next.length > 1 ? "s" : ""} attached`);
+      }
+    } catch {
+      toast.error("Couldn't process image");
+    }
+  };
+
+  const removePhoto = (idx: number) => setPhotos(p => p.filter((_, i) => i !== idx));
+  const updateCaption = (idx: number, caption: string) =>
+    setPhotos(p => p.map((ph, i) => (i === idx ? { ...ph, caption } : ph)));
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
@@ -166,6 +210,80 @@ export default function LogVisit() {
               />
             </div>
           </div>
+        </div>
+
+        {/* Photos */}
+        <div className="surface-card p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="label-eyebrow">3 · Site Photos</div>
+            <div className="text-xs text-foreground-muted tabular-nums">{photos.length} / {MAX_PHOTOS}</div>
+          </div>
+
+          <input
+            ref={cameraRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={e => { handleFiles(e.target.files); e.target.value = ""; }}
+          />
+          <input
+            ref={galleryRef}
+            type="file"
+            accept="image/*"
+            multiple
+            className="hidden"
+            onChange={e => { handleFiles(e.target.files); e.target.value = ""; }}
+          />
+
+          <div className="grid grid-cols-2 gap-2">
+            <Button
+              type="button" variant="primary" size="lg"
+              onClick={() => cameraRef.current?.click()}
+              disabled={photos.length >= MAX_PHOTOS}
+            >
+              <Camera className="h-4 w-4" /> Take photo
+            </Button>
+            <Button
+              type="button" variant="secondary" size="lg"
+              onClick={() => galleryRef.current?.click()}
+              disabled={photos.length >= MAX_PHOTOS}
+            >
+              <ImagePlus className="h-4 w-4" /> Upload
+            </Button>
+          </div>
+
+          {photos.length > 0 && (
+            <div className="grid grid-cols-3 gap-2">
+              {photos.map((p, i) => (
+                <div key={i} className="relative group">
+                  <div className="aspect-square rounded-xl overflow-hidden bg-surface-low">
+                    <img src={p.dataUrl} alt={`Site photo ${i + 1}`} className="h-full w-full object-cover" />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => removePhoto(i)}
+                    className="absolute top-1.5 right-1.5 h-7 w-7 grid place-items-center rounded-full bg-background/90 shadow-soft hover:bg-destructive hover:text-destructive-foreground transition-colors"
+                    aria-label="Remove photo"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                  <input
+                    value={p.caption ?? ""}
+                    onChange={e => updateCaption(i, e.target.value)}
+                    placeholder="Caption (optional)"
+                    className="mt-1.5 w-full h-8 px-2 rounded-lg bg-surface-low text-xs outline-none focus:shadow-glow"
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+
+          {photos.length === 0 && (
+            <p className="text-xs text-foreground-muted">
+              Capture conditions on-site or attach existing images. Photos compress automatically.
+            </p>
+          )}
         </div>
 
         <Button type="submit" size="lg" className="w-full">

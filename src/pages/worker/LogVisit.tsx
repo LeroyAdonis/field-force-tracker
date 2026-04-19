@@ -212,6 +212,80 @@ export default function LogVisit() {
           </div>
         </div>
 
+        {/* Photos */}
+        <div className="surface-card p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="label-eyebrow">3 · Site Photos</div>
+            <div className="text-xs text-foreground-muted tabular-nums">{photos.length} / {MAX_PHOTOS}</div>
+          </div>
+
+          <input
+            ref={cameraRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={e => { handleFiles(e.target.files); e.target.value = ""; }}
+          />
+          <input
+            ref={galleryRef}
+            type="file"
+            accept="image/*"
+            multiple
+            className="hidden"
+            onChange={e => { handleFiles(e.target.files); e.target.value = ""; }}
+          />
+
+          <div className="grid grid-cols-2 gap-2">
+            <Button
+              type="button" variant="primary" size="lg"
+              onClick={() => cameraRef.current?.click()}
+              disabled={photos.length >= MAX_PHOTOS}
+            >
+              <Camera className="h-4 w-4" /> Take photo
+            </Button>
+            <Button
+              type="button" variant="secondary" size="lg"
+              onClick={() => galleryRef.current?.click()}
+              disabled={photos.length >= MAX_PHOTOS}
+            >
+              <ImagePlus className="h-4 w-4" /> Upload
+            </Button>
+          </div>
+
+          {photos.length > 0 && (
+            <div className="grid grid-cols-3 gap-2">
+              {photos.map((p, i) => (
+                <div key={i} className="relative group">
+                  <div className="aspect-square rounded-xl overflow-hidden bg-surface-low">
+                    <img src={p.dataUrl} alt={`Site photo ${i + 1}`} className="h-full w-full object-cover" />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => removePhoto(i)}
+                    className="absolute top-1.5 right-1.5 h-7 w-7 grid place-items-center rounded-full bg-background/90 shadow-soft hover:bg-destructive hover:text-destructive-foreground transition-colors"
+                    aria-label="Remove photo"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                  <input
+                    value={p.caption ?? ""}
+                    onChange={e => updateCaption(i, e.target.value)}
+                    placeholder="Caption (optional)"
+                    className="mt-1.5 w-full h-8 px-2 rounded-lg bg-surface-low text-xs outline-none focus:shadow-glow"
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+
+          {photos.length === 0 && (
+            <p className="text-xs text-foreground-muted">
+              Capture conditions on-site or attach existing images. Photos compress automatically.
+            </p>
+          )}
+        </div>
+
         <Button type="submit" size="lg" className="w-full">
           Log Visit & Update KPIs
         </Button>

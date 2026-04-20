@@ -22,6 +22,8 @@ interface AppState {
   logout: () => void;
 
   addVisit: (v: Omit<Visit, "id" | "inspection"> & { inspectionType: string; notes: string; photos?: { dataUrl: string; caption?: string }[] }) => void;
+  removeVisit: (visitId: string) => void;
+  updateVisit: (visitId: string, updates: Partial<Visit>) => void;
   addSite: (s: Omit<Site, "id">) => Site;
   updateSite: (id: string, patch: Partial<Site>) => void;
   removeSite: (id: string) => void;
@@ -65,6 +67,10 @@ export const useApp = create<AppState>((set, get) => ({
     };
     set({ visits: [visit, ...get().visits] });
   },
+
+  removeVisit: (visitId) => set({ visits: get().visits.filter(v => v.id !== visitId) }),
+  updateVisit: (visitId, updates) =>
+    set({ visits: get().visits.map(v => (v.id === visitId ? { ...v, ...updates } : v)) }),
 
   addSite: (s) => {
     const site: Site = { ...s, id: `s${Date.now()}` };

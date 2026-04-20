@@ -2,7 +2,103 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useApp } from "@/lib/store";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { toast } from "@/hooks/use-toast";
 import { Compass, ArrowRight, Eye, EyeOff, Lock, Mail, ShieldCheck, Activity } from "lucide-react";
+
+/**
+ * Demo-only credential validator.
+ * In production, replace this function with a real auth service call
+ * (e.g. Firebase Auth, Cognito, or custom JWT endpoint).
+ * Currently accepts any password — the check is a no-op scaffold.
+ */
+function validateCredentials(_email: string, _password: string): boolean {
+  // TODO: Replace with real authentication service.
+  // For demo mode, any password is accepted.
+  return true;
+}
+
+function ForgotPasswordDialog() {
+  const [resetEmail, setResetEmail] = useState("");
+  const [submitted, setSubmitted] = useState(false);
+  const [open, setOpen] = useState(false);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resetEmail) return;
+    // Demo mode: no real email send — just show confirmation
+    setSubmitted(true);
+    toast({ title: "Password reset link sent (demo)", description: `Check ${resetEmail} for instructions.` });
+  };
+
+  const handleOpenChange = (nextOpen: boolean) => {
+    setOpen(nextOpen);
+    if (!nextOpen) {
+      // Reset state when dialog closes
+      setTimeout(() => {
+        setSubmitted(false);
+        setResetEmail("");
+      }, 200);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogTrigger asChild>
+        <button type="button" className="text-xs font-semibold text-accent hover:underline">
+          Forgot?
+        </button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Reset Password</DialogTitle>
+          <DialogDescription>
+            Enter your corporate email and we'll send you a reset link.
+          </DialogDescription>
+        </DialogHeader>
+
+        {submitted ? (
+          <div className="py-4 text-center">
+            <div className="mx-auto mb-3 h-10 w-10 rounded-full bg-success/20 grid place-items-center">
+              <Mail className="h-5 w-5 text-success" />
+            </div>
+            <p className="text-sm font-medium">Reset link sent!</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Check your inbox at <span className="font-semibold">{resetEmail}</span>
+            </p>
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="relative">
+              <Mail className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-foreground-muted" />
+              <input
+                type="email"
+                required
+                value={resetEmail}
+                onChange={(e) => setResetEmail(e.target.value)}
+                className="w-full h-12 pl-11 pr-4 rounded-xl bg-surface-low text-foreground placeholder:text-foreground-muted/70 focus:bg-surface-lowest focus:shadow-glow outline-none transition-all"
+                placeholder="name@kinetic.enterprise"
+              />
+            </div>
+            <DialogFooter>
+              <Button type="submit" className="w-full">
+                Send Reset Link
+              </Button>
+            </DialogFooter>
+          </form>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 export default function Login() {
   const navigate = useNavigate();
@@ -11,18 +107,44 @@ export default function Login() {
   const [email, setEmail] = useState("admin@kinetic.enterprise");
   const [pass, setPass] = useState("demo");
   const [showPass, setShowPass] = useState(false);
+  const [error, setError] = useState("");
+
+  const isValidEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
+    setError("");
+
+    // Email format validation
+    if (!isValidEmail(email)) {
+      setError("Please enter a valid email address");
+      return;
+    }
+
     const isAdmin = email.toLowerCase().startsWith("admin");
-    if (isAdmin) { loginAs("admin"); navigate("/admin"); return; }
+    if (isAdmin) {
+      // TODO: Replace validateCredentials with real auth check in production
+      validateCredentials(email, pass);
+      loginAs("admin");
+      navigate("/admin");
+      return;
+    }
+
     const w = workers.find(w => w.email.toLowerCase() === email.toLowerCase());
-    loginAs("worker", w?.id);
+    if (!w) {
+      setError("No account found for this email");
+      return;
+    }
+
+    // TODO: Replace validateCredentials with real auth check in production
+    validateCredentials(email, pass);
+    loginAs("worker", w.id);
     navigate("/worker");
   };
 
   const quick = (mail: string) => {
     setEmail(mail);
+    setError("");
     const isAdmin = mail.toLowerCase().startsWith("admin");
     if (isAdmin) { loginAs("admin"); navigate("/admin"); return; }
     const w = workers.find(w => w.email.toLowerCase() === mail.toLowerCase());
@@ -57,16 +179,19 @@ export default function Login() {
                 <Mail className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-foreground-muted" />
                 <input
                   type="email" required value={email}
-                  onChange={e => setEmail(e.target.value)}
-                  className="w-full h-12 pl-11 pr-4 rounded-xl bg-surface-low text-foreground placeholder:text-foreground-muted/70 focus:bg-surface-lowest focus:shadow-glow outline-none transition-all"
+                  onChange={e => { setEmail(e.target.value); setError(""); }}
+                  className={`w-full h-12 pl-11 pr-4 rounded-xl bg-surface-low text-foreground placeholder:text-foreground-muted/70 focus:bg-surface-lowest focus:shadow-glow outline-none transition-all ${error ? "ring-2 ring-danger/60 border-danger" : ""}`}
                   placeholder="name@kinetic.enterprise"
                 />
               </div>
+              {error && (
+                <p className="mt-1.5 text-xs text-danger font-medium">{error}</p>
+              )}
             </div>
             <div>
               <div className="flex items-center justify-between mb-2">
                 <label className="label-eyebrow">Security Key</label>
-                <button type="button" className="text-xs font-semibold text-accent hover:underline">Forgot?</button>
+                <ForgotPasswordDialog />
               </div>
               <div className="relative">
                 <Lock className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-foreground-muted" />
@@ -80,6 +205,10 @@ export default function Login() {
                   {showPass ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
+              {/* Demo-only indicator — auth is not enforced */}
+              <p className="mt-1.5 text-[11px] text-foreground-muted/60 italic">
+                Demo mode — any password is accepted
+              </p>
             </div>
 
             <Button type="submit" size="lg" className="w-full">

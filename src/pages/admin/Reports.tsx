@@ -1,15 +1,30 @@
 import { useApp } from "@/lib/store";
+import { todayISO } from "@/lib/mock-data";
 import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
-  Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
+  Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Download } from "lucide-react";
 
 type Period = "7d" | "30d" | "90d";
 
 export default function Reports() {
   const { workers, visits, sites, dailyVisitsTarget } = useApp();
+  const navigate = useNavigate();
   const [period, setPeriod] = useState<Period>("30d");
   const days = period === "7d" ? 7 : period === "30d" ? 30 : 90;
+
+  // 10.3 — Date range based on todayISO
+  const dateRange = useMemo(() => {
+    const end = new Date(todayISO + "T00:00:00");
+    const start = new Date(todayISO + "T00:00:00");
+    start.setDate(start.getDate() - (days - 1));
+    const fmt = (d: Date) => d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+    return `${fmt(start)} — ${fmt(end)}`;
+  }, [days]);
 
   const series = useMemo(() => {
     const arr: { date: string; label: string; visits: number; km: number; target: number }[] = [];
@@ -55,6 +70,31 @@ export default function Reports() {
 
   const PIE_COLORS = ["hsl(226 100% 64%)", "hsl(158 84% 39%)", "hsl(38 92% 50%)", "hsl(0 84% 60%)", "hsl(265 80% 65%)", "hsl(190 80% 50%)"];
 
+  // 10.1 — Day detail dialog state
+  const [dayDetail, setDayDetail] = useState<{ date: string; visits: number; km: number } | null>(null);
+
+  // 10.2 — CSV export
+  const handleExportCSV = () => {
+    // Build area chart CSV (Date, Visits, KM)
+    const areaRows = series.map(r => `${r.date},${r.visits},${r.km}`);
+    const areaCsv = ["Date,Visits,KM", ...areaRows].join("\n");
+
+    // Build bar chart CSV (Worker, Visits, KM)
+    const workerRows = byWorker.map(r => `${r.name},${r.visits},${r.km}`);
+    const workerCsv = ["Worker,Visits,KM", ...workerRows].join("\n");
+
+    const csv = `Trend Data\n${areaCsv}\n\nWorker Data\n${workerCsv}`;
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `report-${period}-${todayISO}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
@@ -63,15 +103,25 @@ export default function Reports() {
           <h1 className="text-3xl lg:text-4xl font-extrabold mt-1">Reports & Analytics</h1>
           <p className="text-foreground-muted text-sm mt-1">Visualize KPI performance and field operations trends.</p>
         </div>
-        <div className="surface-recessed p-1 flex">
-          {(["7d", "30d", "90d"] as Period[]).map(p => (
-            <button key={p} onClick={() => setPeriod(p)}
-              className={`px-3 py-1.5 text-xs font-bold uppercase tracking-wider rounded-lg transition-all ${
-                period === p ? "bg-primary text-primary-foreground shadow-soft" : "text-foreground-muted"
-              }`}>{p}</button>
-          ))}
+        <div className="flex items-center gap-3">
+          <div className="surface-recessed p-1 flex">
+            {(["7d", "30d", "90d"] as Period[]).map(p => (
+              <button key={p} onClick={() => setPeriod(p)}
+                className={`px-3 py-1.5 text-xs font-bold uppercase tracking-wider rounded-lg transition-all ${
+                  period === p ? "bg-primary text-primary-foreground shadow-soft" : "text-foreground-muted"
+                }`}>{p}</button>
+            ))}
+          </div>
+          {/* 10.2 — Export CSV button */}
+          <Button variant="outline" size="sm" onClick={handleExportCSV} className="gap-1.5">
+            <Download className="h-4 w-4" />
+            Export CSV
+          </Button>
         </div>
       </div>
+
+      {/* 10.3 — Date range display */}
+      <p className="text-sm text-foreground-muted -mt-3">{dateRange}</p>
 
       {/* KPI summary */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -84,7 +134,7 @@ export default function Reports() {
         </div>
       </div>
 
-      {/* Big chart */}
+      {/* Big chart — 10.1: onClick opens day detail dialog */}
       <div className="surface-card p-6">
         <div className="flex items-center justify-between mb-5">
           <div>
@@ -94,7 +144,16 @@ export default function Reports() {
         </div>
         <div className="h-72">
           <ResponsiveContainer>
-            <AreaChart data={series} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
+            <AreaChart
+              data={series}
+              margin={{ top: 8, right: 8, left: -12, bottom: 0 }}
+              onClick={(payload) => {
+                if (payload?.activePayload?.[0]?.payload) {
+                  const d = payload.activePayload[0].payload;
+                  setDayDetail({ date: d.date, visits: d.visits, km: d.km });
+                }
+              }}
+            >
               <defs>
                 <linearGradient id="g1" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor="hsl(226 100% 64%)" stopOpacity={0.45} />
@@ -116,13 +175,45 @@ export default function Reports() {
         </div>
       </div>
 
+      {/* 10.1 — Day detail dialog */}
+      <Dialog open={!!dayDetail} onOpenChange={(open) => { if (!open) setDayDetail(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Day Detail</DialogTitle>
+            <DialogDescription>
+              {dayDetail
+                ? new Date(dayDetail.date + "T00:00:00").toLocaleDateString(undefined, { weekday: "long", year: "numeric", month: "long", day: "numeric" })
+                : ""}
+            </DialogDescription>
+          </DialogHeader>
+          {dayDetail && (
+            <div className="grid grid-cols-2 gap-4 mt-2">
+              <div className="surface-card p-4 text-center">
+                <div className="label-eyebrow">Visits</div>
+                <div className="display-num text-2xl mt-1">{dayDetail.visits}</div>
+              </div>
+              <div className="surface-card p-4 text-center">
+                <div className="label-eyebrow">KM</div>
+                <div className="display-num text-2xl mt-1">{dayDetail.km}</div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+        {/* 10.1: Bar chart click navigates to /admin/workforce */}
         <div className="surface-card p-6 xl:col-span-2">
           <div className="label-eyebrow mb-1">By Worker</div>
           <h2 className="text-lg font-bold">Visits & Distance per Operative</h2>
           <div className="h-64 mt-4">
             <ResponsiveContainer>
-              <BarChart data={byWorker} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
+              <BarChart
+                data={byWorker}
+                margin={{ top: 8, right: 8, left: -12, bottom: 0 }}
+                onClick={() => navigate("/admin/workforce")}
+                style={{ cursor: "pointer" }}
+              >
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--surface-high))" vertical={false} />
                 <XAxis dataKey="name" tick={{ fontSize: 11, fill: "hsl(var(--foreground-muted))" }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fontSize: 11, fill: "hsl(var(--foreground-muted))" }} axisLine={false} tickLine={false} />
@@ -135,13 +226,23 @@ export default function Reports() {
           </div>
         </div>
 
+        {/* 10.1: Pie chart click navigates to /admin/sites */}
         <div className="surface-card p-6">
           <div className="label-eyebrow mb-1">Distribution</div>
           <h2 className="text-lg font-bold">Top Sites Visited</h2>
           <div className="h-64 mt-4">
             <ResponsiveContainer>
               <PieChart>
-                <Pie data={bySite} dataKey="value" nameKey="name" innerRadius={48} outerRadius={84} paddingAngle={3}>
+                <Pie
+                  data={bySite}
+                  dataKey="value"
+                  nameKey="name"
+                  innerRadius={48}
+                  outerRadius={84}
+                  paddingAngle={3}
+                  onClick={() => navigate("/admin/sites")}
+                  style={{ cursor: "pointer" }}
+                >
                   {bySite.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
                 </Pie>
                 <Tooltip contentStyle={{ background: "hsl(var(--surface-lowest))", border: "none", borderRadius: 12, boxShadow: "var(--shadow-ambient)" }} />

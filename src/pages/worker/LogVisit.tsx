@@ -1,16 +1,18 @@
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { useApp } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, MapPin, Plus, Search, Check, FileText, Camera, ImagePlus, X } from "lucide-react";
+import { ArrowLeft, MapPin, Plus, Check, FileText, Camera, ImagePlus, X, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { todayISO } from "@/lib/mock-data";
+import { DebouncedSearchInput } from "@/components/DebouncedSearchInput";
 
 const inspectionTypes = ["Structural Audit", "Safety Inspection", "Compliance Check", "Foundation Review", "Electrical Survey"];
 
 const MAX_PHOTOS = 6;
 const MAX_DIM = 1600; // px — downscale for storage sanity
 const JPEG_QUALITY = 0.82;
+const MAX_NOTES_LENGTH = 500;
 
 async function fileToCompressedDataUrl(file: File): Promise<string> {
   const bitmap = await createImageBitmap(file);
@@ -22,6 +24,30 @@ async function fileToCompressedDataUrl(file: File): Promise<string> {
   const ctx = canvas.getContext("2d")!;
   ctx.drawImage(bitmap, 0, 0, w, h);
   return canvas.toDataURL("image/jpeg", JPEG_QUALITY);
+}
+
+interface TouchedFields {
+  siteId: boolean;
+  km: boolean;
+  notes: boolean;
+}
+
+function validateSiteId(siteId: string | null): string | null {
+  if (!siteId) return "Please select a site";
+  return null;
+}
+
+function validateKm(km: string): string | null {
+  if (!km) return "Distance is required";
+  const kmNum = parseFloat(km);
+  if (isNaN(kmNum) || kmNum < 0) return "Enter a valid distance";
+  return null;
+}
+
+function validateNotes(notes: string): string | null {
+  if (!notes.trim()) return "Add inspection notes";
+  if (notes.length > MAX_NOTES_LENGTH) return `Notes must be ${MAX_NOTES_LENGTH} characters or less`;
+  return null;
 }
 
 export default function LogVisit() {
@@ -38,25 +64,86 @@ export default function LogVisit() {
   const cameraRef = useRef<HTMLInputElement>(null);
   const galleryRef = useRef<HTMLInputElement>(null);
 
+  // 4.1 — Touched tracking for inline validation
+  const [touched, setTouched] = useState<TouchedFields>({ siteId: false, km: false, notes: false });
+
+  // 4.3 — Camera availability
+  const [hasCamera, setHasCamera] = useState(false);
+
+  // 4.4 — Submit loading state
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // 4.5 — Reset form on mount
+  useEffect(() => {
+    setQuery("");
+    setSiteId(null);
+    setShowNew(false);
+    setNewSite({ name: "", address: "", zone: "" });
+    setKm("");
+    setType(inspectionTypes[0]);
+    setNotes("");
+    setPhotos([]);
+    setTouched({ siteId: false, km: false, notes: false });
+  }, []);
+
+  // 4.3 — Check camera availability
+  useEffect(() => {
+    let cancelled = false;
+    const checkCamera = async () => {
+      try {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) {
+          if (!cancelled) setHasCamera(false);
+          return;
+        }
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        if (!cancelled) {
+          setHasCamera(devices.some(d => d.kind === "videoinput"));
+        }
+      } catch {
+        if (!cancelled) setHasCamera(false);
+      }
+    };
+    checkCamera();
+    return () => { cancelled = true; };
+  }, []);
+
   const filtered = useMemo(() =>
     sites.filter(s => s.active && (s.name.toLowerCase().includes(query.toLowerCase()) || s.address.toLowerCase().includes(query.toLowerCase()))),
     [sites, query]);
 
   if (!user || user.role !== "worker") return null;
 
+  // 4.1 — Validation helpers (show errors only after field is touched)
+  const siteIdError = touched.siteId ? validateSiteId(siteId) : null;
+  const kmError = touched.km ? validateKm(km) : null;
+  const notesError = touched.notes ? validateNotes(notes) : null;
+
+  // 4.1 — Disable submit until all required fields are valid
+  const isFormValid = !validateSiteId(siteId) && !validateKm(km) && !validateNotes(notes);
+
+  const markTouched = (field: keyof TouchedFields) => {
+    setTouched(prev => ({ ...prev, [field]: true }));
+  };
+
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!siteId) { toast.error("Please select a site"); return; }
-    const kmNum = parseFloat(km);
-    if (isNaN(kmNum) || kmNum < 0) { toast.error("Enter a valid distance"); return; }
-    if (!notes.trim()) { toast.error("Add inspection notes"); return; }
-    addVisit({
-      workerId: user.id, siteId, date: todayISO, timestamp: new Date().toISOString(),
-      km: kmNum, inspectionType: type, notes: notes.trim(),
-      photos: photos.length ? photos : undefined,
-    });
-    toast.success("Site visit logged", { description: "KPI progress updated." });
-    navigate("/worker");
+    // Mark all fields as touched to show errors
+    setTouched({ siteId: true, km: true, notes: true });
+
+    if (!isFormValid) return;
+
+    // 4.4 — Loading state with simulated async
+    setIsSubmitting(true);
+    setTimeout(() => {
+      addVisit({
+        workerId: user.id, siteId, date: todayISO, timestamp: new Date().toISOString(),
+        km: parseFloat(km), inspectionType: type, notes: notes.trim(),
+        photos: photos.length ? photos : undefined,
+      });
+      toast.success("Site visit logged", { description: "KPI progress updated." });
+      setIsSubmitting(false);
+      navigate("/worker");
+    }, 200);
   };
 
   const addNewSite = () => {
@@ -108,21 +195,24 @@ export default function LogVisit() {
         {/* Site selection */}
         <div className="surface-card p-5">
           <div className="label-eyebrow mb-3">1 · Select Site</div>
-          <div className="relative">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-foreground-muted" />
-            <input
-              value={query} onChange={e => setQuery(e.target.value)}
-              placeholder="Search sites or addresses..."
-              className="w-full h-11 pl-11 pr-4 rounded-xl bg-surface-low focus:bg-surface-lowest focus:shadow-glow outline-none transition-all"
-            />
-          </div>
+          {/* 4.2 — Debounced search input */}
+          <DebouncedSearchInput
+            onValueChange={setQuery}
+            placeholder="Search sites or addresses..."
+            debounceMs={300}
+          />
+
+          {/* 4.1 — Inline validation error for site selection */}
+          {siteIdError && (
+            <p className="mt-2 text-xs text-destructive font-medium">{siteIdError}</p>
+          )}
 
           <div className="mt-3 max-h-72 overflow-y-auto pr-1 space-y-1.5">
             {filtered.map(s => (
               <button
                 type="button"
                 key={s.id}
-                onClick={() => setSiteId(s.id)}
+                onClick={() => { setSiteId(s.id); markTouched("siteId"); }}
                 className={`w-full flex items-center gap-3 p-3 rounded-xl text-left transition-all ${
                   siteId === s.id ? "bg-primary text-primary-foreground shadow-soft" : "bg-surface-low hover:bg-surface-high"
                 }`}
@@ -183,10 +273,18 @@ export default function LogVisit() {
               <label className="text-xs font-semibold text-foreground-muted">Distance (km)</label>
               <input
                 type="number" inputMode="decimal" step="0.1" min="0"
-                value={km} onChange={e => setKm(e.target.value)}
+                value={km}
+                onChange={e => { setKm(e.target.value); }}
+                onBlur={() => markTouched("km")}
                 placeholder="0.0"
-                className="mt-1.5 w-full h-11 px-4 rounded-xl bg-surface-low focus:bg-surface-lowest focus:shadow-glow outline-none transition-all tabular-nums font-semibold"
+                className={`mt-1.5 w-full h-11 px-4 rounded-xl bg-surface-low focus:bg-surface-lowest focus:shadow-glow outline-none transition-all tabular-nums font-semibold ${
+                  kmError ? "ring-2 ring-destructive" : ""
+                }`}
               />
+              {/* 4.1 — Inline validation error for km */}
+              {kmError && (
+                <p className="mt-1 text-xs text-destructive font-medium">{kmError}</p>
+              )}
             </div>
             <div>
               <label className="text-xs font-semibold text-foreground-muted">Inspection Type</label>
@@ -203,11 +301,25 @@ export default function LogVisit() {
             <div className="relative mt-1.5">
               <FileText className="absolute left-4 top-4 h-4 w-4 text-foreground-muted" />
               <textarea
-                value={notes} onChange={e => setNotes(e.target.value)}
+                value={notes}
+                onChange={e => { setNotes(e.target.value); }}
+                onBlur={() => markTouched("notes")}
                 rows={4}
+                maxLength={MAX_NOTES_LENGTH}
                 placeholder="What did you inspect? Findings, follow-ups, photos uploaded..."
-                className="w-full pl-11 pr-4 py-3 rounded-xl bg-surface-low focus:bg-surface-lowest focus:shadow-glow outline-none transition-all text-sm leading-relaxed resize-none"
+                className={`w-full pl-11 pr-4 py-3 rounded-xl bg-surface-low focus:bg-surface-lowest focus:shadow-glow outline-none transition-all text-sm leading-relaxed resize-none ${
+                  notesError ? "ring-2 ring-destructive" : ""
+                }`}
               />
+            </div>
+            {/* 4.1 — Character count + inline validation for notes */}
+            <div className="flex items-center justify-between mt-1">
+              {notesError ? (
+                <p className="text-xs text-destructive font-medium">{notesError}</p>
+              ) : (
+                <span />
+              )}
+              <span className="text-xs text-foreground-muted tabular-nums">{notes.length} / {MAX_NOTES_LENGTH}</span>
             </div>
           </div>
         </div>
@@ -237,17 +349,21 @@ export default function LogVisit() {
           />
 
           <div className="grid grid-cols-2 gap-2">
+            {/* 4.3 — Only show "Take photo" button if camera is available */}
+            {hasCamera && (
+              <Button
+                type="button" variant="primary" size="lg"
+                onClick={() => cameraRef.current?.click()}
+                disabled={photos.length >= MAX_PHOTOS}
+              >
+                <Camera className="h-4 w-4" /> Take photo
+              </Button>
+            )}
             <Button
-              type="button" variant="primary" size="lg"
-              onClick={() => cameraRef.current?.click()}
-              disabled={photos.length >= MAX_PHOTOS}
-            >
-              <Camera className="h-4 w-4" /> Take photo
-            </Button>
-            <Button
-              type="button" variant="secondary" size="lg"
+              type="button" variant={hasCamera ? "secondary" : "primary"} size="lg"
               onClick={() => galleryRef.current?.click()}
               disabled={photos.length >= MAX_PHOTOS}
+              className={hasCamera ? "" : "w-full"}
             >
               <ImagePlus className="h-4 w-4" /> Upload
             </Button>
@@ -286,8 +402,15 @@ export default function LogVisit() {
           )}
         </div>
 
-        <Button type="submit" size="lg" className="w-full">
-          Log Visit & Update KPIs
+        {/* 4.1 + 4.4 — Disabled when invalid or submitting; shows spinner during submission */}
+        <Button type="submit" size="lg" className="w-full" disabled={!isFormValid || isSubmitting}>
+          {isSubmitting ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" /> Logging visit…
+            </>
+          ) : (
+            "Log Visit & Update KPIs"
+          )}
         </Button>
       </form>
     </div>

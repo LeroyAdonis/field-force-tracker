@@ -1,13 +1,49 @@
+import { useState, useEffect, useCallback } from "react";
 import { useApp } from "@/lib/store";
 import { dailyKpis, dayProgress, statusColor } from "@/lib/kpi";
 import { StatusChip, StatusPill } from "@/components/StatusChip";
-import { Calendar, MapPin, Users, FileBarChart, UserPlus, Activity, AlertTriangle } from "lucide-react";
+import { Calendar, MapPin, Users, FileBarChart, UserPlus, Activity, AlertTriangle, RefreshCw } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { todayISO } from "@/lib/mock-data";
+import { WorkerDetailDrawer } from "@/components/WorkerDetailDrawer";
+import { VisitDetailDrawer } from "@/components/VisitDetailDrawer";
+import type { Worker, Visit } from "@/lib/types";
 
 export default function AdminDashboard() {
   const { workers, visits, sites, dailyVisitsTarget } = useApp();
+
+  // 6.1 — WorkerDetailDrawer state for flagged workers
+  const [selectedWorker, setSelectedWorker] = useState<Worker | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+
+  // 6.2 — VisitDetailDrawer state for activity feed
+  const [selectedVisit, setSelectedVisit] = useState<Visit | null>(null);
+  const [visitDrawerOpen, setVisitDrawerOpen] = useState(false);
+
+  // 6.3 — Auto-refresh state
+  const [refreshCounter, setRefreshCounter] = useState(0);
+  const [lastUpdated, setLastUpdated] = useState(() => {
+    const now = new Date();
+    return `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+  });
+
+  const handleRefresh = useCallback(() => {
+    setRefreshCounter(c => c + 1);
+    const now = new Date();
+    setLastUpdated(`${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`);
+  }, []);
+
+  // Auto-refresh every 60 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      handleRefresh();
+    }, 60_000);
+    return () => clearInterval(interval);
+  }, [handleRefresh]);
+
+  // refreshCounter is referenced here so the toggle forces re-computation
+  const _rc = refreshCounter;
 
   const todayVisits = visits.filter(v => v.date === todayISO);
   const totalVisitsToday = todayVisits.length;
@@ -25,8 +61,20 @@ export default function AdminDashboard() {
 
   const efficiency = Math.round(
     (snapshots.reduce((s, x) => s + Math.min(1, x.kpi.visitsPct / Math.max(0.1, x.kpi.expected)), 0) /
-      Math.max(1, snapshots.length)) * 100
+    Math.max(1, snapshots.length)) * 100
   );
+
+  // 6.1 — Click handler for flagged worker rows
+  const handleFlaggedWorkerClick = (worker: Worker) => {
+    setSelectedWorker(worker);
+    setDrawerOpen(true);
+  };
+
+  // 6.2 — Click handler for activity feed items
+  const handleActivityClick = (visit: Visit) => {
+    setSelectedVisit(visit);
+    setVisitDrawerOpen(true);
+  };
 
   return (
     <div className="space-y-8">
@@ -38,6 +86,11 @@ export default function AdminDashboard() {
           <p className="text-foreground-muted mt-2 max-w-xl">Real-time oversight for site operations, workforce KPIs, and safety protocols.</p>
         </div>
         <div className="flex items-center gap-2">
+          {/* 6.3 — Last updated timestamp and manual refresh */}
+          <span className="text-xs text-foreground-muted tabular-nums">Last updated: {lastUpdated}</span>
+          <Button variant="ghost" size="icon" onClick={handleRefresh} title="Refresh data">
+            <RefreshCw className="h-4 w-4" />
+          </Button>
           <Button variant="secondary" size="lg" asChild>
             <Link to="/admin/reports"><FileBarChart className="h-4 w-4" /> View Reports</Link>
           </Button>
@@ -104,11 +157,12 @@ export default function AdminDashboard() {
             {flagged.length === 0 && (
               <div className="text-sm text-foreground-muted py-10 text-center">All workers tracking on pace.</div>
             )}
+            {/* 6.1 — Flagged worker rows now open WorkerDetailDrawer instead of linking to /admin/at-risk */}
             {flagged.map(({ worker, kpi }) => (
-              <Link
-                to="/admin/at-risk"
+              <button
                 key={worker.id}
-                className="grid grid-cols-12 gap-3 items-center px-3 py-3 rounded-xl hover:bg-surface-low transition-colors"
+                onClick={() => handleFlaggedWorkerClick(worker)}
+                className="grid grid-cols-12 gap-3 items-center px-3 py-3 rounded-xl hover:bg-surface-low transition-colors w-full text-left"
               >
                 <div className="col-span-5 flex items-center gap-3 min-w-0">
                   <img src={worker.avatar} className="h-9 w-9 rounded-full object-cover" alt="" />
@@ -122,7 +176,7 @@ export default function AdminDashboard() {
                 <div className="col-span-2 text-right text-sm font-bold tabular-nums">
                   {Math.round(Math.min(kpi.visitsPct, kpi.kmPct) * 100)}%
                 </div>
-              </Link>
+              </button>
             ))}
           </div>
         </div>
@@ -134,12 +188,17 @@ export default function AdminDashboard() {
               <div className="font-bold text-sm">Real-time Activity</div>
             </div>
             <div className="space-y-3">
+              {/* 6.2 — Activity items are now clickable to show VisitDetailDrawer */}
               {recent.map(v => {
                 const w = workers.find(x => x.id === v.workerId);
                 const s = sites.find(x => x.id === v.siteId);
                 const t = new Date(v.timestamp);
                 return (
-                  <div key={v.id} className="flex items-start gap-3">
+                  <button
+                    key={v.id}
+                    onClick={() => handleActivityClick(v)}
+                    className="flex items-start gap-3 w-full text-left hover:bg-surface-low/50 rounded-lg p-1 -m-1 transition-colors"
+                  >
                     <div className="h-2 w-2 rounded-full bg-success mt-2 shrink-0" />
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-semibold leading-tight">Visit Logged</div>
@@ -150,7 +209,7 @@ export default function AdminDashboard() {
                         {String(t.getHours()).padStart(2, "0")}:{String(t.getMinutes()).padStart(2, "0")} · {v.km} km
                       </div>
                     </div>
-                  </div>
+                  </button>
                 );
               })}
             </div>
@@ -168,6 +227,20 @@ export default function AdminDashboard() {
           </div>
         </div>
       </div>
+
+      {/* 6.1 — WorkerDetailDrawer for flagged workers */}
+      <WorkerDetailDrawer
+        open={drawerOpen}
+        onOpenChange={setDrawerOpen}
+        worker={selectedWorker}
+      />
+
+      {/* 6.2 — VisitDetailDrawer for activity feed */}
+      <VisitDetailDrawer
+        open={visitDrawerOpen}
+        onOpenChange={setVisitDrawerOpen}
+        visit={selectedVisit}
+      />
     </div>
   );
 }

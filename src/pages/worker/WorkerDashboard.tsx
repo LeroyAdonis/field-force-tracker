@@ -1,14 +1,38 @@
+import { useState, useEffect, useCallback } from "react";
 import { useApp } from "@/lib/store";
 import { dailyKpis, statusColor, statusLabel } from "@/lib/kpi";
 import { KpiRing } from "@/components/KpiRing";
 import { StatusChip } from "@/components/StatusChip";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
-import { ChevronRight, MapPin, Plus, TrendingUp, Activity, Cloud } from "lucide-react";
+import { ChevronRight, MapPin, Plus, TrendingUp, Activity, Cloud, RefreshCw } from "lucide-react";
 import { todayISO } from "@/lib/mock-data";
+import { VisitDetailDrawer } from "@/components/VisitDetailDrawer";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import type { Visit } from "@/lib/types";
 
 export default function WorkerDashboard() {
   const { user, visits, workers, sites, dailyVisitsTarget } = useApp();
+  const [selectedVisit, setSelectedVisit] = useState<Visit | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [refreshCounter, setRefreshCounter] = useState(0);
+  const [lastUpdated, setLastUpdated] = useState(() => {
+    const now = new Date();
+    return `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+  });
+
+  const handleRefresh = useCallback(() => {
+    setRefreshCounter(c => c + 1);
+    const now = new Date();
+    setLastUpdated(`${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`);
+  }, []);
+
+  // Auto-refresh every 60s
+  useEffect(() => {
+    const interval = setInterval(handleRefresh, 60_000);
+    return () => clearInterval(interval);
+  }, [handleRefresh]);
+
   if (!user || user.role !== "worker") return null;
   const me = workers.find(w => w.id === user.id)!;
   const kpi = dailyKpis(me, visits, dailyVisitsTarget);
@@ -18,6 +42,11 @@ export default function WorkerDashboard() {
   const recent = myToday.slice(0, 3);
 
   const greet = new Date().getHours() < 12 ? "Morning" : new Date().getHours() < 18 ? "Afternoon" : "Evening";
+
+  const openVisitDetail = (visit: Visit) => {
+    setSelectedVisit(visit);
+    setDrawerOpen(true);
+  };
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
@@ -32,36 +61,70 @@ export default function WorkerDashboard() {
 
       {/* KPI rings */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div className="surface-card p-6 flex items-center gap-6">
-          <KpiRing
-            value={kpi.visitsPct}
-            status={statusColor(kpi.status) as any}
-            centerTop={`${kpi.visits}/${kpi.visitsTarget}`}
-            centerBottom="VISITS"
-            size={150}
-          />
-          <div>
-            <div className="label-eyebrow">Today's Site Visits</div>
-            <div className="mt-1 text-2xl font-extrabold">{Math.round(kpi.visitsPct * 100)}%</div>
-            <StatusChip status={kpi.status} className="mt-3" />
-          </div>
-        </div>
-        <div className="surface-card p-6 flex items-center gap-6">
-          <KpiRing
-            value={kpi.kmPct}
-            status={statusColor(kpi.status) as any}
-            centerTop={`${kpi.km}`}
-            centerBottom="KM TODAY"
-            size={150}
-          />
-          <div>
-            <div className="label-eyebrow">Distance Covered</div>
-            <div className="mt-1 text-2xl font-extrabold">{Math.round(kpi.kmPct * 100)}%</div>
-            <div className="mt-3 text-xs text-foreground-muted flex items-center gap-1.5">
-              <Cloud className="h-3.5 w-3.5 text-accent" /> Synced · {kpi.kmTarget} km target
-            </div>
-          </div>
-        </div>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div className="surface-card p-6 flex items-center gap-6 cursor-pointer">
+                <KpiRing
+                  value={kpi.visitsPct}
+                  status={statusColor(kpi.status) as any}
+                  centerTop={`${kpi.visits}/${kpi.visitsTarget}`}
+                  centerBottom="VISITS"
+                  size={150}
+                />
+                <div>
+                  <div className="label-eyebrow">Today's Site Visits</div>
+                  <div className="mt-1 text-2xl font-extrabold">{Math.round(kpi.visitsPct * 100)}%</div>
+                  <StatusChip status={kpi.status} className="mt-3" />
+                </div>
+              </div>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="max-w-xs">
+              <p>Visits completed today ({kpi.visits}) out of daily target ({kpi.visitsTarget}). {Math.round(kpi.visitsPct * 100)}% achieved.</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div className="surface-card p-6 flex items-center gap-6 cursor-pointer">
+                <KpiRing
+                  value={kpi.kmPct}
+                  status={statusColor(kpi.status) as any}
+                  centerTop={`${kpi.km}`}
+                  centerBottom="KM TODAY"
+                  size={150}
+                />
+                <div>
+                  <div className="label-eyebrow">Distance Covered</div>
+                  <div className="mt-1 text-2xl font-extrabold">{Math.round(kpi.kmPct * 100)}%</div>
+                  <div className="mt-3 text-xs text-foreground-muted flex items-center gap-1.5">
+                    <Cloud className="h-3.5 w-3.5 text-accent" /> Synced · {kpi.kmTarget} km target
+                  </div>
+                </div>
+              </div>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="max-w-xs">
+              <p>Kilometers traveled today ({kpi.km} km) out of daily target ({kpi.kmTarget} km). {Math.round(kpi.kmPct * 100)}% achieved.</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      </div>
+
+      {/* Last updated + manual refresh */}
+      <div className="flex items-center justify-between text-xs text-foreground-muted">
+        <span>Last updated: {lastUpdated}</span>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={handleRefresh}
+          className="h-7 gap-1.5 text-xs text-foreground-muted hover:text-foreground"
+        >
+          <RefreshCw className="h-3.5 w-3.5" />
+          Refresh
+        </Button>
       </div>
 
       {/* Primary CTA - dark */}
@@ -97,7 +160,12 @@ export default function WorkerDashboard() {
               const site = sites.find(s => s.id === v.siteId);
               const t = new Date(v.timestamp);
               return (
-                <div key={v.id} className="flex items-start gap-3 p-3 rounded-xl bg-surface-low">
+                <button
+                  key={v.id}
+                  type="button"
+                  onClick={() => openVisitDetail(v)}
+                  className="w-full flex items-start gap-3 p-3 rounded-xl bg-surface-low hover:bg-surface-high transition-colors text-left"
+                >
                   <div className="h-10 w-10 rounded-lg bg-surface-high grid place-items-center shrink-0">
                     <MapPin className="h-4 w-4 text-foreground-muted" />
                   </div>
@@ -110,7 +178,7 @@ export default function WorkerDashboard() {
                     </div>
                     <div className="text-xs text-foreground-muted mt-0.5">{v.inspection.type} · {v.km} km</div>
                   </div>
-                </div>
+                </button>
               );
             })}
           </div>
@@ -134,6 +202,13 @@ export default function WorkerDashboard() {
           <div className="text-xs text-foreground-muted mt-1">kilometers covered</div>
         </div>
       </div>
+
+      {/* Visit detail drawer */}
+      <VisitDetailDrawer
+        open={drawerOpen}
+        onOpenChange={setDrawerOpen}
+        visit={selectedVisit}
+      />
     </div>
   );
 }

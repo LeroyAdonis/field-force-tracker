@@ -1,6 +1,9 @@
+import { useState, type ReactNode } from "react";
 import { NavLink } from "@/components/NavLink";
+import { NotificationPopover } from "@/components/NotificationPopover";
+import { MobileNavSheet, MobileNavTrigger } from "@/components/MobileNavSheet";
 import { useApp } from "@/lib/store";
-import { Compass, LayoutDashboard, BarChart3, Building2, Users, LogOut, Settings, Bell, AlertTriangle, MapPin, FilePlus2 } from "lucide-react";
+import { Compass, LayoutDashboard, BarChart3, Building2, Users, LogOut, Settings, AlertTriangle, MapPin, FilePlus2, MoreHorizontal } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 const adminNav = [
@@ -23,10 +26,23 @@ interface Props { children: React.ReactNode; }
 export function AppShell({ children }: Props) {
   const { user, logout } = useApp();
   const navigate = useNavigate();
+  const [sheetOpen, setSheetOpen] = useState(false);
+
   if (!user) return null;
   const items = user.role === "admin" ? adminNav : workerNav;
 
   const onLogout = () => { logout(); navigate("/login"); };
+
+  // Build nav items for MobileNavSheet
+  const sheetNavItems = items.map(item => ({
+    label: item.label,
+    href: item.to,
+    icon: <item.icon className="h-4 w-4" /> as ReactNode,
+  }));
+
+  const handleSheetNavigate = (href: string) => {
+    navigate(href);
+  };
 
   return (
     <div className="min-h-screen bg-background flex">
@@ -78,6 +94,7 @@ export function AppShell({ children }: Props) {
         {/* Topbar (mobile-aware) */}
         <header className="sticky top-0 z-30 backdrop-blur-xl bg-background/80 border-b border-border/60 px-4 lg:px-10 h-14 flex items-center justify-between">
           <div className="flex items-center gap-3 lg:hidden">
+            <MobileNavTrigger onClick={() => setSheetOpen(true)} />
             <div className="h-8 w-8 rounded-lg bg-gradient-primary grid place-items-center">
               <Compass className="h-3.5 w-3.5 text-primary-foreground" />
             </div>
@@ -87,10 +104,7 @@ export function AppShell({ children }: Props) {
             {user.role === "admin" ? "Command Center · Admin" : "Field Operations Console"}
           </div>
           <div className="flex items-center gap-2">
-            <button className="h-9 w-9 grid place-items-center rounded-lg hover:bg-surface-low transition-colors relative">
-              <Bell className="h-4 w-4" />
-              <span className="absolute top-2 right-2 h-1.5 w-1.5 rounded-full bg-danger animate-pulse-soft" />
-            </button>
+            <NotificationPopover />
             <img src={user.avatar} alt={user.name} className="h-8 w-8 rounded-full object-cover lg:hidden" />
           </div>
         </header>
@@ -100,7 +114,7 @@ export function AppShell({ children }: Props) {
           {children}
         </main>
 
-        {/* Mobile bottom nav */}
+        {/* Mobile bottom nav — 3 primary items + "More" button */}
         <nav className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-surface-lowest/95 backdrop-blur-xl border-t border-border">
           <div className="grid grid-cols-4 px-2 py-2">
             {items.slice(0, 3).map(item => (
@@ -115,13 +129,24 @@ export function AppShell({ children }: Props) {
                 <span className="text-[10px] font-semibold">{item.label.split(" ")[0]}</span>
               </NavLink>
             ))}
-            <button onClick={onLogout} className="flex flex-col items-center gap-1 py-1.5 rounded-xl text-foreground-muted">
-              <LogOut className="h-4 w-4" />
-              <span className="text-[10px] font-semibold">Sign Out</span>
+            <button
+              onClick={() => setSheetOpen(true)}
+              className="flex flex-col items-center gap-1 py-1.5 rounded-xl text-foreground-muted"
+            >
+              <MoreHorizontal className="h-4 w-4" />
+              <span className="text-[10px] font-semibold">More</span>
             </button>
           </div>
         </nav>
       </div>
+
+      {/* Mobile nav sheet — accessible from topbar hamburger and bottom nav "More" */}
+      <MobileNavSheet
+        open={sheetOpen}
+        onOpenChange={setSheetOpen}
+        navItems={sheetNavItems}
+        onNavigate={handleSheetNavigate}
+      />
     </div>
   );
 }

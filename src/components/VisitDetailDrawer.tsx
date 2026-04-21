@@ -10,20 +10,17 @@ import {
 import { Button } from "@/components/ui/button";
 import { ConfirmActionDialog } from "@/components/ConfirmActionDialog";
 import { PhotoLightbox } from "@/components/PhotoLightbox";
-import { useApp } from "@/lib/store";
-import type { Visit } from "@/lib/types";
+import { useSites } from "@/hooks/useSites";
+import { useDeleteVisit } from "@/hooks/useVisits";
+import type { VisitData } from "@/hooks/useVisits";
 import { MapPin, Calendar, Route, ClipboardCheck, FileText, ImageIcon } from "lucide-react";
 
 interface VisitDetailDrawerProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  visit: Visit | null;
+  visit: VisitData | null;
 }
 
-/**
- * Drawer component showing visit details including site info,
- * inspection data, photo gallery, and action buttons.
- */
 export function VisitDetailDrawer({
   open,
   onOpenChange,
@@ -32,17 +29,21 @@ export function VisitDetailDrawer({
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState(0);
-  const { sites, removeVisit } = useApp();
+  const { data: sites = [] } = useSites();
+  const deleteVisitMutation = useDeleteVisit();
 
   if (!visit) return null;
 
   const site = sites.find((s) => s.id === visit.siteId);
-  const photos = visit.inspection.photos?.map((p) => p.dataUrl) ?? [];
+  const photos = visit.inspection?.photos?.map((p) => p.dataUrl) ?? [];
 
   const handleDelete = () => {
-    removeVisit(visit.id);
-    setConfirmDeleteOpen(false);
-    onOpenChange(false);
+    deleteVisitMutation.mutate(visit.id, {
+      onSuccess: () => {
+        setConfirmDeleteOpen(false);
+        onOpenChange(false);
+      },
+    });
   };
 
   const openLightbox = (index: number) => {
@@ -63,14 +64,13 @@ export function VisitDetailDrawer({
       <Drawer open={open} onOpenChange={onOpenChange}>
         <DrawerContent>
           <DrawerHeader>
-            <DrawerTitle>{site?.name ?? "Unknown Site"}</DrawerTitle>
+            <DrawerTitle>{site?.name ?? visit.siteName ?? "Unknown Site"}</DrawerTitle>
             <DrawerDescription>
               {site?.address ?? "No address available"}
             </DrawerDescription>
           </DrawerHeader>
 
           <div className="space-y-4 overflow-y-auto px-4 pb-4">
-            {/* Visit details */}
             <div className="grid gap-3">
               <div className="flex items-center gap-2 text-sm">
                 <Calendar className="h-4 w-4 text-muted-foreground" />
@@ -84,22 +84,25 @@ export function VisitDetailDrawer({
                 <span>{visit.km} km</span>
               </div>
 
-              <div className="flex items-center gap-2 text-sm">
-                <ClipboardCheck className="h-4 w-4 text-muted-foreground" />
-                <span className="text-muted-foreground">Inspection:</span>
-                <span>{visit.inspection.type}</span>
-              </div>
+              {visit.inspection && (
+                <>
+                  <div className="flex items-center gap-2 text-sm">
+                    <ClipboardCheck className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-muted-foreground">Inspection:</span>
+                    <span>{visit.inspection.type}</span>
+                  </div>
 
-              {visit.inspection.notes && (
-                <div className="flex items-start gap-2 text-sm">
-                  <FileText className="mt-0.5 h-4 w-4 text-muted-foreground" />
-                  <span className="text-muted-foreground">Notes:</span>
-                  <span>{visit.inspection.notes}</span>
-                </div>
+                  {visit.inspection.notes && (
+                    <div className="flex items-start gap-2 text-sm">
+                      <FileText className="mt-0.5 h-4 w-4 text-muted-foreground" />
+                      <span className="text-muted-foreground">Notes:</span>
+                      <span>{visit.inspection.notes}</span>
+                    </div>
+                  )}
+                </>
               )}
             </div>
 
-            {/* Photo gallery */}
             {photos.length > 0 && (
               <div className="space-y-2">
                 <div className="flex items-center gap-2 text-sm font-medium">
@@ -139,7 +142,6 @@ export function VisitDetailDrawer({
         </DrawerContent>
       </Drawer>
 
-      {/* Delete confirmation */}
       <ConfirmActionDialog
         open={confirmDeleteOpen}
         onOpenChange={setConfirmDeleteOpen}
@@ -150,7 +152,6 @@ export function VisitDetailDrawer({
         onConfirm={handleDelete}
       />
 
-      {/* Photo lightbox */}
       <PhotoLightbox
         open={lightboxOpen}
         onOpenChange={setLightboxOpen}

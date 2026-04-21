@@ -9,31 +9,30 @@ import { Button } from "@/components/ui/button";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import type { Visit } from "@/lib/types";
+import { useVisits, type VisitData } from "@/hooks/useVisits";
+import { useSites } from "@/hooks/useSites";
 
 const inspectionTypes = ["Structural Audit", "Safety Inspection", "Compliance Check", "Foundation Review", "Electrical Survey"];
 const INITIAL_DAYS = 30;
 const LOAD_MORE_INCREMENT = 15;
 
 export default function VisitHistory() {
-  const { user, visits, sites } = useApp();
+  const { user } = useApp();
   const navigate = useNavigate();
+  const { data: visits = [] } = useVisits();
+  const { data: sites = [] } = useSites();
 
-  // 5.1 — Search and filter state
   const [searchQuery, setSearchQuery] = useState("");
   const [dateFrom, setDateFrom] = useState<Date | undefined>(undefined);
   const [dateTo, setDateTo] = useState<Date | undefined>(undefined);
   const [inspectionFilter, setInspectionFilter] = useState<string>("all");
   const [datePopoverOpen, setDatePopoverOpen] = useState(false);
 
-  // 5.2 — Pagination state
   const [visibleDays, setVisibleDays] = useState(INITIAL_DAYS);
 
-  // 5.3 — Visit detail drawer state
-  const [selectedVisit, setSelectedVisit] = useState<Visit | null>(null);
+  const [selectedVisit, setSelectedVisit] = useState<VisitData | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
 
-  // 5.4 — Photo lightbox state
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxPhotos, setLightboxPhotos] = useState<string[]>([]);
   const [lightboxIndex, setLightboxIndex] = useState(0);
@@ -44,22 +43,18 @@ export default function VisitHistory() {
     .filter(v => v.workerId === user.id)
     .sort((a, b) => +new Date(b.timestamp) - +new Date(a.timestamp));
 
-  // 5.1 — Apply search and filters
   const filtered = mine.filter(v => {
     const site = sites.find(s => s.id === v.siteId);
 
-    // Text search: match site name or inspection type
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       const siteName = site?.name?.toLowerCase() ?? "";
-      const inspType = v.inspection.type?.toLowerCase() ?? "";
+      const inspType = v.inspection?.type?.toLowerCase() ?? "";
       if (!siteName.includes(q) && !inspType.includes(q)) return false;
     }
 
-    // Inspection type filter
-    if (inspectionFilter !== "all" && v.inspection.type !== inspectionFilter) return false;
+    if (inspectionFilter !== "all" && v.inspection?.type !== inspectionFilter) return false;
 
-    // Date range filter
     if (dateFrom || dateTo) {
       const visitDate = new Date(v.date);
       visitDate.setHours(0, 0, 0, 0);
@@ -78,7 +73,6 @@ export default function VisitHistory() {
     return true;
   });
 
-  // Group by date
   const groups = filtered.reduce<Record<string, typeof filtered>>((acc, v) => {
     (acc[v.date] ||= []).push(v);
     return acc;
@@ -88,17 +82,16 @@ export default function VisitHistory() {
   const displayedEntries = groupEntries.slice(0, visibleDays);
   const hasMore = groupEntries.length > visibleDays;
 
-  // Count total filtered visits and displayed visits
   const totalVisits = filtered.length;
   const displayedVisits = displayedEntries.reduce((sum, [, items]) => sum + items.length, 0);
 
-  const openVisitDetail = (visit: Visit) => {
+  const openVisitDetail = (visit: VisitData) => {
     setSelectedVisit(visit);
     setDrawerOpen(true);
   };
 
-  const openLightbox = (visit: Visit, photoIndex: number) => {
-    const photos = visit.inspection.photos?.map(p => p.dataUrl) ?? [];
+  const openLightbox = (visit: VisitData, photoIndex: number) => {
+    const photos = visit.inspection?.photos?.map(p => p.dataUrl) ?? [];
     setLightboxPhotos(photos);
     setLightboxIndex(photoIndex);
     setLightboxOpen(true);
@@ -122,7 +115,6 @@ export default function VisitHistory() {
         <p className="text-foreground-muted text-sm mt-1">Every site visit and inspection you've recorded.</p>
       </div>
 
-      {/* 5.1 — Search and filter controls */}
       <div className="space-y-3">
         <DebouncedSearchInput
           onValueChange={setSearchQuery}
@@ -130,7 +122,6 @@ export default function VisitHistory() {
           debounceMs={300}
         />
         <div className="flex flex-wrap items-center gap-2">
-          {/* Date range picker */}
           <Popover open={datePopoverOpen} onOpenChange={setDatePopoverOpen}>
             <PopoverTrigger asChild>
               <Button variant="outline" size="sm" className="h-9 gap-1.5 text-xs">
@@ -170,7 +161,6 @@ export default function VisitHistory() {
             </PopoverContent>
           </Popover>
 
-          {/* Inspection type filter */}
           <Select value={inspectionFilter} onValueChange={setInspectionFilter}>
             <SelectTrigger className="h-9 w-[180px] text-xs">
               <SelectValue placeholder="All types" />
@@ -183,7 +173,6 @@ export default function VisitHistory() {
             </SelectContent>
           </Select>
 
-          {/* Clear all filters */}
           {(searchQuery || dateFrom || dateTo || inspectionFilter !== "all") && (
             <Button
               variant="ghost"
@@ -202,14 +191,13 @@ export default function VisitHistory() {
         </div>
       </div>
 
-      {/* 5.2 — Visit count display */}
       <div className="text-xs text-foreground-muted tabular-nums">
         Showing {displayedVisits} of {totalVisits} visits
       </div>
 
       <div className="space-y-6">
         {displayedEntries.map(([date, items]) => {
-          const totalKm = items.reduce((s, v) => s + v.km, 0).toFixed(1);
+          const totalKm = items.reduce((s, v) => s + Number(v.km), 0).toFixed(1);
           return (
             <div key={date}>
               <div className="flex items-center justify-between mb-3 px-1">
@@ -220,7 +208,7 @@ export default function VisitHistory() {
                 {items.map((v, i) => {
                   const site = sites.find(s => s.id === v.siteId);
                   const t = new Date(v.timestamp);
-                  const photos = v.inspection.photos ?? [];
+                  const photos = v.inspection?.photos ?? [];
                   return (
                     <button
                       key={v.id}
@@ -234,12 +222,11 @@ export default function VisitHistory() {
                         </div>
                         <MapPin className="h-4 w-4 text-foreground-muted shrink-0 mt-0.5" />
                         <div className="flex-1 min-w-0">
-                          <div className="font-semibold text-sm">{site?.name ?? "Unknown site"}</div>
-                          <div className="text-xs text-foreground-muted truncate">{v.inspection.type} · {v.inspection.notes}</div>
+                          <div className="font-semibold text-sm">{site?.name ?? v.siteName ?? "Unknown site"}</div>
+                          <div className="text-xs text-foreground-muted truncate">{v.inspection?.type} · {v.inspection?.notes}</div>
                         </div>
                         <div className="text-xs font-bold tabular-nums shrink-0">{v.km} km</div>
                       </div>
-                      {/* 5.4 — Photo thumbnails open in lightbox instead of new tab */}
                       {photos.length > 0 && (
                         <div className="mt-2 ml-[60px] flex gap-1.5 overflow-x-auto pb-1">
                           {photos.map((p, pIdx) => (
@@ -270,26 +257,20 @@ export default function VisitHistory() {
         )}
       </div>
 
-      {/* 5.2 — Load more button */}
       {hasMore && (
         <div className="flex justify-center">
-          <Button
-            variant="outline"
-            onClick={() => setVisibleDays(d => d + LOAD_MORE_INCREMENT)}
-          >
+          <Button variant="outline" onClick={() => setVisibleDays(d => d + LOAD_MORE_INCREMENT)}>
             Load more
           </Button>
         </div>
       )}
 
-      {/* 5.3 — Visit detail drawer */}
       <VisitDetailDrawer
         open={drawerOpen}
         onOpenChange={setDrawerOpen}
         visit={selectedVisit}
       />
 
-      {/* 5.4 — Photo lightbox */}
       <PhotoLightbox
         open={lightboxOpen}
         onOpenChange={setLightboxOpen}

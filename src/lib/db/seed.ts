@@ -1,5 +1,5 @@
-import { db, user, userRole, worker, site, visit, inspection, photo } from "./index";
-import { randomUUID } from "crypto";
+import { db, user, account, userRole, worker, site, visit, inspection, photo } from "./index";
+import { hashPassword } from "better-auth/crypto";
 
 async function seed() {
   console.log("🌱 Seeding database with demo data...");
@@ -35,6 +35,45 @@ async function seed() {
 
     await db.insert(user).values(demoUsers).onConflictDoNothing();
     console.log("    ✓ Created 3 demo users");
+
+    // ==========================================
+    // 1b. CREATE CREDENTIAL ACCOUNTS (for email/password login)
+    // ==========================================
+    console.log("  Creating demo accounts...");
+
+    const passwordHash = await hashPassword("demo");
+    const demoAccounts = [
+      {
+        id: "account_admin_demo",
+        userId: "user_admin_demo",
+        accountId: "user_admin_demo",
+        providerId: "credential",
+        password: passwordHash,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+      {
+        id: "account_marcus_demo",
+        userId: "user_marcus_demo",
+        accountId: "user_marcus_demo",
+        providerId: "credential",
+        password: passwordHash,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+      {
+        id: "account_sarah_demo",
+        userId: "user_sarah_demo",
+        accountId: "user_sarah_demo",
+        providerId: "credential",
+        password: passwordHash,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+    ];
+
+    await db.insert(account).values(demoAccounts).onConflictDoNothing();
+    console.log("    ✓ Created 3 demo credential accounts");
 
     // ==========================================
     // 2. CREATE USER ROLES

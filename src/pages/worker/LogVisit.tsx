@@ -6,11 +6,13 @@ import { ArrowLeft, MapPin, Plus, Check, FileText, Camera, ImagePlus, X, Loader2
 import { toast } from "sonner";
 import { todayISO } from "@/lib/mock-data";
 import { DebouncedSearchInput } from "@/components/DebouncedSearchInput";
+import { useSites, useAddSite } from "@/hooks/useSites";
+import { useAddVisit } from "@/hooks/useVisits";
 
 const inspectionTypes = ["Structural Audit", "Safety Inspection", "Compliance Check", "Foundation Review", "Electrical Survey"];
 
 const MAX_PHOTOS = 6;
-const MAX_DIM = 1600; // px — downscale for storage sanity
+const MAX_DIM = 1600;
 const JPEG_QUALITY = 0.82;
 const MAX_NOTES_LENGTH = 500;
 
@@ -51,8 +53,12 @@ function validateNotes(notes: string): string | null {
 }
 
 export default function LogVisit() {
-  const { user, sites, addSite, addVisit } = useApp();
+  const { user } = useApp();
   const navigate = useNavigate();
+  const { data: sites = [] } = useSites();
+  const addSiteMutation = useAddSite();
+  const addVisitMutation = useAddVisit();
+
   const [query, setQuery] = useState("");
   const [siteId, setSiteId] = useState<string | null>(null);
   const [showNew, setShowNew] = useState(false);
@@ -64,16 +70,9 @@ export default function LogVisit() {
   const cameraRef = useRef<HTMLInputElement>(null);
   const galleryRef = useRef<HTMLInputElement>(null);
 
-  // 4.1 — Touched tracking for inline validation
   const [touched, setTouched] = useState<TouchedFields>({ siteId: false, km: false, notes: false });
-
-  // 4.3 — Camera availability
   const [hasCamera, setHasCamera] = useState(false);
 
-  // 4.4 — Submit loading state
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // 4.5 — Reset form on mount
   useEffect(() => {
     setQuery("");
     setSiteId(null);
@@ -86,7 +85,6 @@ export default function LogVisit() {
     setTouched({ siteId: false, km: false, notes: false });
   }, []);
 
-  // 4.3 — Check camera availability
   useEffect(() => {
     let cancelled = false;
     const checkCamera = async () => {
@@ -96,9 +94,7 @@ export default function LogVisit() {
           return;
         }
         const devices = await navigator.mediaDevices.enumerateDevices();
-        if (!cancelled) {
-          setHasCamera(devices.some(d => d.kind === "videoinput"));
-        }
+        if (!cancelled) setHasCamera(devices.some(d => d.kind === "videoinput"));
       } catch {
         if (!cancelled) setHasCamera(false);
       }
@@ -113,12 +109,9 @@ export default function LogVisit() {
 
   if (!user || user.role !== "worker") return null;
 
-  // 4.1 — Validation helpers (show errors only after field is touched)
   const siteIdError = touched.siteId ? validateSiteId(siteId) : null;
   const kmError = touched.km ? validateKm(km) : null;
   const notesError = touched.notes ? validateNotes(notes) : null;
-
-  // 4.1 — Disable submit until all required fields are valid
   const isFormValid = !validateSiteId(siteId) && !validateKm(km) && !validateNotes(notes);
 
   const markTouched = (field: keyof TouchedFields) => {
@@ -127,32 +120,37 @@ export default function LogVisit() {
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    // Mark all fields as touched to show errors
     setTouched({ siteId: true, km: true, notes: true });
+    if (!isFormValid || !siteId) return;
 
-    if (!isFormValid) return;
-
-    // 4.4 — Loading state with simulated async
-    setIsSubmitting(true);
-    setTimeout(() => {
-      addVisit({
-        workerId: user.id, siteId, date: todayISO, timestamp: new Date().toISOString(),
-        km: parseFloat(km), inspectionType: type, notes: notes.trim(),
-        photos: photos.length ? photos : undefined,
-      });
-      toast.success("Site visit logged", { description: "KPI progress updated." });
-      setIsSubmitting(false);
-      navigate("/worker");
-    }, 200);
+    addVisitMutation.mutate({
+      workerId: user.id,
+      siteId,
+      date: todayISO,
+      km: parseFloat(km),
+      inspectionType: type,
+      notes: notes.trim(),
+      photos: photos.length ? photos : undefined,
+    }, {
+      onSuccess: () => {
+        toast.success("Site visit logged", { description: "KPI progress updated." });
+        navigate("/worker");
+      },
+      onError: () => toast.error("Failed to log visit"),
+    });
   };
 
   const addNewSite = () => {
     if (!newSite.name.trim() || !newSite.address.trim()) { toast.error("Name and address required"); return; }
-    const s = addSite({ ...newSite, active: true });
-    setSiteId(s.id);
-    setShowNew(false);
-    setNewSite({ name: "", address: "", zone: "" });
-    toast.success("Site added", { description: s.name });
+    addSiteMutation.mutate({ name: newSite.name, address: newSite.address, zone: newSite.zone, active: true }, {
+      onSuccess: (s) => {
+        setSiteId(s.id);
+        setShowNew(false);
+        setNewSite({ name: "", address: "", zone: "" });
+        toast.success("Site added", { description: s.name });
+      },
+      onError: () => toast.error("Failed to add site"),
+    });
   };
 
   const handleFiles = async (files: FileList | null) => {
@@ -179,6 +177,8 @@ export default function LogVisit() {
   const updateCaption = (idx: number, caption: string) =>
     setPhotos(p => p.map((ph, i) => (i === idx ? { ...ph, caption } : ph)));
 
+  const isSubmitting = addVisitMutation.isPending;
+
   return (
     <div className="max-w-2xl mx-auto space-y-6">
       <button onClick={() => navigate(-1)} className="inline-flex items-center gap-2 text-sm font-semibold text-foreground-muted hover:text-foreground">
@@ -195,14 +195,12 @@ export default function LogVisit() {
         {/* Site selection */}
         <div className="surface-card p-5">
           <div className="label-eyebrow mb-3">1 · Select Site</div>
-          {/* 4.2 — Debounced search input */}
           <DebouncedSearchInput
             onValueChange={setQuery}
             placeholder="Search sites or addresses..."
             debounceMs={300}
           />
 
-          {/* 4.1 — Inline validation error for site selection */}
           {siteIdError && (
             <p className="mt-2 text-xs text-destructive font-medium">{siteIdError}</p>
           )}
@@ -257,7 +255,9 @@ export default function LogVisit() {
                   className="w-full h-10 px-4 rounded-lg bg-surface-low outline-none focus:shadow-glow text-sm"
                 />
                 <div className="flex gap-2">
-                  <Button type="button" size="sm" variant="primary" onClick={addNewSite}>Save site</Button>
+                  <Button type="button" size="sm" variant="primary" onClick={addNewSite} disabled={addSiteMutation.isPending}>
+                    {addSiteMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : "Save site"}
+                  </Button>
                   <Button type="button" size="sm" variant="ghost" onClick={() => setShowNew(false)}>Cancel</Button>
                 </div>
               </div>
@@ -281,7 +281,6 @@ export default function LogVisit() {
                   kmError ? "ring-2 ring-destructive" : ""
                 }`}
               />
-              {/* 4.1 — Inline validation error for km */}
               {kmError && (
                 <p className="mt-1 text-xs text-destructive font-medium">{kmError}</p>
               )}
@@ -312,7 +311,6 @@ export default function LogVisit() {
                 }`}
               />
             </div>
-            {/* 4.1 — Character count + inline validation for notes */}
             <div className="flex items-center justify-between mt-1">
               {notesError ? (
                 <p className="text-xs text-destructive font-medium">{notesError}</p>
@@ -349,7 +347,6 @@ export default function LogVisit() {
           />
 
           <div className="grid grid-cols-2 gap-2">
-            {/* 4.3 — Only show "Take photo" button if camera is available */}
             {hasCamera && (
               <Button
                 type="button" variant="primary" size="lg"
@@ -402,7 +399,6 @@ export default function LogVisit() {
           )}
         </div>
 
-        {/* 4.1 + 4.4 — Disabled when invalid or submitting; shows spinner during submission */}
         <Button type="submit" size="lg" className="w-full" disabled={!isFormValid || isSubmitting}>
           {isSubmitting ? (
             <>

@@ -41,17 +41,21 @@ export const account = pgTable(
     userId: text("userId")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
-    type: text("type").notNull(),
-    provider: text("provider").notNull(),
-    providerAccountId: text("providerAccountId").notNull(),
+    accountId: text("accountId").notNull(),
+    providerId: text("providerId").notNull(),
     accessToken: text("accessToken"),
     refreshToken: text("refreshToken"),
-    expiresAt: timestamp("expiresAt"),
+    idToken: text("idToken"),
+    accessTokenExpiresAt: timestamp("accessTokenExpiresAt"),
+    refreshTokenExpiresAt: timestamp("refreshTokenExpiresAt"),
+    scope: text("scope"),
+    password: text("password"),
     createdAt: timestamp("createdAt").defaultNow(),
+    updatedAt: timestamp("updatedAt").defaultNow(),
   },
   (table) => ({
     userIdIdx: index("account_userId_idx").on(table.userId),
-    providerIdx: index("account_provider_idx").on(table.provider, table.providerAccountId),
+    providerIdx: index("account_provider_idx").on(table.providerId, table.accountId),
   })
 );
 

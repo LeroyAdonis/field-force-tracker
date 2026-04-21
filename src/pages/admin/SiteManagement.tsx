@@ -1,8 +1,7 @@
-import { useApp } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useState, useMemo } from "react";
-import { Plus, MapPin, Pencil } from "lucide-react";
+import { Plus, MapPin, Pencil, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { DebouncedSearchInput } from "@/components/DebouncedSearchInput";
 import { ConfirmActionDialog } from "@/components/ConfirmActionDialog";
@@ -21,10 +20,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { Site } from "@/lib/types";
+import { useSites, useAddSite, useUpdateSite, useDeleteSite, type SiteData } from "@/hooks/useSites";
+import { useVisits } from "@/hooks/useVisits";
 
 export default function SiteManagement() {
-  const { sites, addSite, updateSite, removeSite, visits } = useApp();
+  const { data: sites = [], isLoading: sitesLoading } = useSites();
+  const { data: visits = [] } = useVisits();
+  const addSiteMutation = useAddSite();
+  const updateSiteMutation = useUpdateSite();
+  const deleteSiteMutation = useDeleteSite();
 
   // Search & filter state
   const [searchQuery, setSearchQuery] = useState("");
@@ -36,24 +40,22 @@ export default function SiteManagement() {
 
   // Edit site dialog state
   const [editOpen, setEditOpen] = useState(false);
-  const [editSite, setEditSite] = useState<Site | null>(null);
+  const [editSite, setEditSite] = useState<SiteData | null>(null);
   const [editDraft, setEditDraft] = useState({ name: "", address: "", zone: "", contact: "" });
 
   // Remove confirmation state
   const [removeOpen, setRemoveOpen] = useState(false);
-  const [removeTarget, setRemoveTarget] = useState<Site | null>(null);
+  const [removeTarget, setRemoveTarget] = useState<SiteData | null>(null);
 
   // Deactivate confirmation state
   const [deactivateOpen, setDeactivateOpen] = useState(false);
-  const [deactivateTarget, setDeactivateTarget] = useState<Site | null>(null);
+  const [deactivateTarget, setDeactivateTarget] = useState<SiteData | null>(null);
 
-  // Extract unique zones for filter dropdown
   const uniqueZones = useMemo(
     () => [...new Set(sites.map(s => s.zone).filter(Boolean))].sort(),
     [sites]
   );
 
-  // Filtered sites
   const filteredSites = useMemo(() => {
     const q = searchQuery.toLowerCase();
     return sites.filter(s => {
@@ -67,33 +69,29 @@ export default function SiteManagement() {
     });
   }, [sites, searchQuery, zoneFilter]);
 
-  // Visit counts by site
   const visitsBySite = visits.reduce<Record<string, number>>((acc, v) => {
     acc[v.siteId] = (acc[v.siteId] ?? 0) + 1;
     return acc;
   }, {});
-
-  // --- Handlers ---
 
   const create = () => {
     if (!draft.name.trim() || !draft.address.trim()) {
       toast.error("Name and address required");
       return;
     }
-    addSite({ ...draft, active: true });
-    setDraft({ name: "", address: "", zone: "", contact: "" });
-    setShowAdd(false);
-    toast.success("Site created");
+    addSiteMutation.mutate({ name: draft.name, address: draft.address, zone: draft.zone, active: true }, {
+      onSuccess: () => {
+        setDraft({ name: "", address: "", zone: "", contact: "" });
+        setShowAdd(false);
+        toast.success("Site created");
+      },
+      onError: () => toast.error("Failed to create site"),
+    });
   };
 
-  const openEdit = (site: Site) => {
+  const openEdit = (site: SiteData) => {
     setEditSite(site);
-    setEditDraft({
-      name: site.name,
-      address: site.address,
-      zone: site.zone,
-      contact: (site as any).contact ?? "",
-    });
+    setEditDraft({ name: site.name, address: site.address, zone: site.zone, contact: "" });
     setEditOpen(true);
   };
 
@@ -103,42 +101,50 @@ export default function SiteManagement() {
       toast.error("Name and address required");
       return;
     }
-    updateSite(editSite.id, {
-      name: editDraft.name,
-      address: editDraft.address,
-      zone: editDraft.zone,
+    updateSiteMutation.mutate({ id: editSite.id, updates: { name: editDraft.name, address: editDraft.address, zone: editDraft.zone } }, {
+      onSuccess: () => {
+        setEditOpen(false);
+        setEditSite(null);
+        toast.success("Site updated");
+      },
+      onError: () => toast.error("Failed to update site"),
     });
-    setEditOpen(false);
-    setEditSite(null);
-    toast.success("Site updated");
   };
 
   const confirmRemove = () => {
     if (!removeTarget) return;
-    removeSite(removeTarget.id);
-    setRemoveOpen(false);
-    setRemoveTarget(null);
-    toast.success("Site removed");
+    deleteSiteMutation.mutate(removeTarget.id, {
+      onSuccess: () => {
+        setRemoveOpen(false);
+        setRemoveTarget(null);
+        toast.success("Site removed");
+      },
+      onError: () => toast.error("Failed to remove site"),
+    });
   };
 
-  const handleToggleActive = (site: Site) => {
+  const handleToggleActive = (site: SiteData) => {
     if (site.active) {
-      // Deactivating — show confirmation
       setDeactivateTarget(site);
       setDeactivateOpen(true);
     } else {
-      // Activating — instant, no confirmation
-      updateSite(site.id, { active: true });
-      toast.success("Site activated");
+      updateSiteMutation.mutate({ id: site.id, updates: { active: true } }, {
+        onSuccess: () => toast.success("Site activated"),
+        onError: () => toast.error("Failed to activate site"),
+      });
     }
   };
 
   const confirmDeactivate = () => {
     if (!deactivateTarget) return;
-    updateSite(deactivateTarget.id, { active: false });
-    setDeactivateOpen(false);
-    setDeactivateTarget(null);
-    toast.success("Site deactivated");
+    updateSiteMutation.mutate({ id: deactivateTarget.id, updates: { active: false } }, {
+      onSuccess: () => {
+        setDeactivateOpen(false);
+        setDeactivateTarget(null);
+        toast.success("Site deactivated");
+      },
+      onError: () => toast.error("Failed to deactivate site"),
+    });
   };
 
   return (
@@ -154,7 +160,6 @@ export default function SiteManagement() {
         </Button>
       </div>
 
-      {/* Search & Zone Filter */}
       <div className="flex flex-col sm:flex-row gap-3">
         <DebouncedSearchInput
           onValueChange={setSearchQuery}
@@ -174,57 +179,58 @@ export default function SiteManagement() {
         </Select>
       </div>
 
-      {/* Site cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {filteredSites.map(s => (
-          <div key={s.id} className="surface-card p-5">
-            <div className="flex items-start justify-between">
-              <div className="h-10 w-10 rounded-xl bg-accent/10 grid place-items-center text-accent">
-                <MapPin className="h-4 w-4" />
+      {sitesLoading ? (
+        <div className="py-12 text-center text-foreground-muted text-sm flex items-center justify-center gap-2">
+          <Loader2 className="h-4 w-4 animate-spin" /> Loading sites…
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filteredSites.map(s => (
+            <div key={s.id} className="surface-card p-5">
+              <div className="flex items-start justify-between">
+                <div className="h-10 w-10 rounded-xl bg-accent/10 grid place-items-center text-accent">
+                  <MapPin className="h-4 w-4" />
+                </div>
+                <button
+                  onClick={() => handleToggleActive(s)}
+                  className={`chip ${s.active ? "chip-success" : "chip-neutral"} cursor-pointer`}
+                >
+                  {s.active ? "Active" : "Inactive"}
+                </button>
               </div>
-              <button
-                onClick={() => handleToggleActive(s)}
-                className={`chip ${s.active ? "chip-success" : "chip-neutral"} cursor-pointer`}
-              >
-                {s.active ? "Active" : "Inactive"}
-              </button>
-            </div>
-            <div className="font-bold mt-4">{s.name}</div>
-            <div className="text-xs text-foreground-muted mt-1">{s.address}</div>
-            <div className="mt-4 pt-4 border-t border-border/60 flex items-center justify-between text-xs">
-              <div className="text-foreground-muted">
-                Zone · <span className="font-semibold text-foreground">{s.zone || "—"}</span>
+              <div className="font-bold mt-4">{s.name}</div>
+              <div className="text-xs text-foreground-muted mt-1">{s.address}</div>
+              <div className="mt-4 pt-4 border-t border-border/60 flex items-center justify-between text-xs">
+                <div className="text-foreground-muted">
+                  Zone · <span className="font-semibold text-foreground">{s.zone || "—"}</span>
+                </div>
+                <div className="font-bold tabular-nums">{visitsBySite[s.id] ?? 0} visits</div>
               </div>
-              <div className="font-bold tabular-nums">{visitsBySite[s.id] ?? 0} visits</div>
+              <div className="mt-3 flex items-center gap-2">
+                <button
+                  onClick={() => openEdit(s)}
+                  className="text-xs font-semibold text-accent hover:text-accent/80 transition-colors inline-flex items-center gap-1"
+                >
+                  <Pencil className="h-3 w-3" /> Edit
+                </button>
+                <button
+                  onClick={() => { setRemoveTarget(s); setRemoveOpen(true); }}
+                  className="text-xs font-semibold text-foreground-muted hover:text-danger transition-colors"
+                >
+                  Remove
+                </button>
+              </div>
             </div>
-            <div className="mt-3 flex items-center gap-2">
-              <button
-                onClick={() => openEdit(s)}
-                className="text-xs font-semibold text-accent hover:text-accent/80 transition-colors inline-flex items-center gap-1"
-              >
-                <Pencil className="h-3 w-3" /> Edit
-              </button>
-              <button
-                onClick={() => {
-                  setRemoveTarget(s);
-                  setRemoveOpen(true);
-                }}
-                className="text-xs font-semibold text-foreground-muted hover:text-danger transition-colors"
-              >
-                Remove
-              </button>
+          ))}
+
+          {filteredSites.length === 0 && (
+            <div className="col-span-full surface-card p-12 text-center">
+              <div className="text-foreground-muted">No sites match your search.</div>
             </div>
-          </div>
-        ))}
+          )}
+        </div>
+      )}
 
-        {filteredSites.length === 0 && (
-          <div className="col-span-full surface-card p-12 text-center">
-            <div className="text-foreground-muted">No sites match your search.</div>
-          </div>
-        )}
-      </div>
-
-      {/* Add Site Dialog (replaces custom overlay) */}
       <Dialog open={showAdd} onOpenChange={setShowAdd}>
         <DialogContent>
           <DialogHeader>
@@ -232,35 +238,20 @@ export default function SiteManagement() {
             <DialogDescription>Enter the details for the new inspectable site.</DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
-            <Input
-              placeholder="Site name"
-              value={draft.name}
-              onChange={e => setDraft({ ...draft, name: e.target.value })}
-            />
-            <Input
-              placeholder="Address"
-              value={draft.address}
-              onChange={e => setDraft({ ...draft, address: e.target.value })}
-            />
-            <Input
-              placeholder="Zone"
-              value={draft.zone}
-              onChange={e => setDraft({ ...draft, zone: e.target.value })}
-            />
-            <Input
-              placeholder="Contact"
-              value={draft.contact}
-              onChange={e => setDraft({ ...draft, contact: e.target.value })}
-            />
+            <Input placeholder="Site name" value={draft.name} onChange={e => setDraft({ ...draft, name: e.target.value })} />
+            <Input placeholder="Address" value={draft.address} onChange={e => setDraft({ ...draft, address: e.target.value })} />
+            <Input placeholder="Zone" value={draft.zone} onChange={e => setDraft({ ...draft, zone: e.target.value })} />
+            <Input placeholder="Contact" value={draft.contact} onChange={e => setDraft({ ...draft, contact: e.target.value })} />
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowAdd(false)}>Cancel</Button>
-            <Button variant="primary" onClick={create}>Create Site</Button>
+            <Button variant="primary" onClick={create} disabled={addSiteMutation.isPending}>
+              {addSiteMutation.isPending ? <><Loader2 className="h-4 w-4 animate-spin" /> Creating…</> : "Create Site"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Edit Site Dialog */}
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
         <DialogContent>
           <DialogHeader>
@@ -268,35 +259,20 @@ export default function SiteManagement() {
             <DialogDescription>Update the details for this site.</DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
-            <Input
-              placeholder="Site name"
-              value={editDraft.name}
-              onChange={e => setEditDraft({ ...editDraft, name: e.target.value })}
-            />
-            <Input
-              placeholder="Address"
-              value={editDraft.address}
-              onChange={e => setEditDraft({ ...editDraft, address: e.target.value })}
-            />
-            <Input
-              placeholder="Zone"
-              value={editDraft.zone}
-              onChange={e => setEditDraft({ ...editDraft, zone: e.target.value })}
-            />
-            <Input
-              placeholder="Contact"
-              value={editDraft.contact}
-              onChange={e => setEditDraft({ ...editDraft, contact: e.target.value })}
-            />
+            <Input placeholder="Site name" value={editDraft.name} onChange={e => setEditDraft({ ...editDraft, name: e.target.value })} />
+            <Input placeholder="Address" value={editDraft.address} onChange={e => setEditDraft({ ...editDraft, address: e.target.value })} />
+            <Input placeholder="Zone" value={editDraft.zone} onChange={e => setEditDraft({ ...editDraft, zone: e.target.value })} />
+            <Input placeholder="Contact" value={editDraft.contact} onChange={e => setEditDraft({ ...editDraft, contact: e.target.value })} />
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditOpen(false)}>Cancel</Button>
-            <Button variant="primary" onClick={saveEdit}>Save</Button>
+            <Button variant="primary" onClick={saveEdit} disabled={updateSiteMutation.isPending}>
+              {updateSiteMutation.isPending ? <><Loader2 className="h-4 w-4 animate-spin" /> Saving…</> : "Save"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Remove Site Confirmation */}
       <ConfirmActionDialog
         open={removeOpen}
         onOpenChange={setRemoveOpen}
@@ -307,7 +283,6 @@ export default function SiteManagement() {
         onConfirm={confirmRemove}
       />
 
-      {/* Deactivate Site Confirmation */}
       <ConfirmActionDialog
         open={deactivateOpen}
         onOpenChange={setDeactivateOpen}

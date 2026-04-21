@@ -2,7 +2,21 @@ import { requireAuth, requireRole, forbidden, badRequest, serverError } from "..
 import { db, worker, userRole } from "../../src/lib/db/index.js";
 import { eq } from "drizzle-orm";
 
-export default async function handler(req: Request) {
+type WorkerResponse = {
+  id: string;
+  userId?: string | null;
+  email?: string | null;
+  displayName?: string | null;
+  avatar?: string | null;
+  jobTitle?: string;
+  dailyKmTarget?: number;
+  active?: boolean;
+  isDemo?: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export default async function handler(req: Request): Promise<Response> {
   const url = new URL(req.url);
   const id = url.pathname.split("/").pop();
 
@@ -26,10 +40,13 @@ export default async function handler(req: Request) {
       });
 
       if (!w) {
-        return new Response(JSON.stringify({ error: "Worker not found" }), {
-          status: 404,
-          headers: { "Content-Type": "application/json" },
-        });
+        return new Response(
+          JSON.stringify({ error: "Worker not found" }),
+          {
+            status: 404,
+            headers: { "Content-Type": "application/json" },
+          }
+        );
       }
 
       // Workers can only see themselves, admins can see all
@@ -37,18 +54,18 @@ export default async function handler(req: Request) {
         return forbidden();
       }
 
-      const response = {
+      const response: WorkerResponse = {
         id: w.id,
-        userId: w.userRole?.userId,
-        email: w.userRole?.user?.email,
-        displayName: w.userRole?.displayName,
-        avatar: w.userRole?.avatar,
+        userId: w.userRole?.userId || null,
+        email: w.userRole?.user?.email || null,
+        displayName: w.userRole?.displayName || null,
+        avatar: w.userRole?.avatar || null,
         jobTitle: w.jobTitle,
         dailyKmTarget: w.dailyKmTarget,
         active: w.active,
         isDemo: w.isDemo,
-        createdAt: w.createdAt,
-        updatedAt: w.updatedAt,
+        createdAt: w.createdAt.toISOString(),
+        updatedAt: w.updatedAt.toISOString(),
       };
 
       return new Response(JSON.stringify(response), {
@@ -66,10 +83,13 @@ export default async function handler(req: Request) {
       });
 
       if (!w) {
-        return new Response(JSON.stringify({ error: "Worker not found" }), {
-          status: 404,
-          headers: { "Content-Type": "application/json" },
-        });
+        return new Response(
+          JSON.stringify({ error: "Worker not found" }),
+          {
+            status: 404,
+            headers: { "Content-Type": "application/json" },
+          }
+        );
       }
 
       // Workers can only update themselves, admins can update anyone
@@ -100,7 +120,7 @@ export default async function handler(req: Request) {
       }
 
       if (Object.keys(updates).length > 0) {
-        updates.updatedAt = new Date();
+        updates.updatedAt = new Date().toISOString();
         await db.update(worker).set(updates).where(eq(worker.id, id));
       }
 
@@ -116,18 +136,18 @@ export default async function handler(req: Request) {
         },
       });
 
-      const response = {
-        id: updated?.id,
-        userId: updated?.userRole?.userId,
-        email: updated?.userRole?.user?.email,
-        displayName: updated?.userRole?.displayName,
-        avatar: updated?.userRole?.avatar,
+      const response: WorkerResponse = {
+        id: updated?.id!,
+        userId: updated?.userRole?.userId || null,
+        email: updated?.userRole?.user?.email || null,
+        displayName: updated?.userRole?.displayName || null,
+        avatar: updated?.userRole?.avatar || null,
         jobTitle: updated?.jobTitle,
         dailyKmTarget: updated?.dailyKmTarget,
         active: updated?.active,
         isDemo: updated?.isDemo,
-        createdAt: updated?.createdAt,
-        updatedAt: updated?.updatedAt,
+        createdAt: updated?.createdAt.toISOString(),
+        updatedAt: updated?.updatedAt.toISOString(),
       };
 
       return new Response(JSON.stringify(response), {
@@ -143,10 +163,13 @@ export default async function handler(req: Request) {
       });
 
       if (!w) {
-        return new Response(JSON.stringify({ error: "Worker not found" }), {
-          status: 404,
-          headers: { "Content-Type": "application/json" },
-        });
+        return new Response(
+          JSON.stringify({ error: "Worker not found" }),
+          {
+            status: 404,
+            headers: { "Content-Type": "application/json" },
+          }
+        );
       }
 
       await db.delete(worker).where(eq(worker.id, id));

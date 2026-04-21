@@ -22,12 +22,13 @@ export const auth = betterAuth({
   trustedOrigins: process.env.BETTER_AUTH_TRUSTED_ORIGINS?.split(",") || [
     "http://localhost:8080",
     "http://localhost:5173",
+    "http://localhost:3000",
   ],
   plugins: [],
   socialProviders: {
     google: {
       clientId: process.env.GOOGLE_CLIENT_ID || "",
-      clientSecret: process.env.GOOGLE_CLIENT_SECRECT || "",
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
       redirectURL: `${process.env.BETTER_AUTH_URL}/api/auth/callback/google`,
     },
   },

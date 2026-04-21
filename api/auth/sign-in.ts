@@ -2,7 +2,7 @@ import { db, user, account } from "../../src/lib/db/index.js";
 import { eq } from "drizzle-orm";
 import { verifyPassword } from "better-auth/crypto";
 
-export default async function handler(req: Request) {
+export default async function handler(req: Request): Promise<Response> {
   if (req.method !== "POST") {
     return new Response(JSON.stringify({ error: "Method not allowed" }), {
       status: 405,
@@ -15,10 +15,13 @@ export default async function handler(req: Request) {
     const { email, password } = body;
 
     if (!email || !password) {
-      return new Response(JSON.stringify({ error: "Email and password required" }), {
-        status: 400,
-        headers: { "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({ error: "Email and password required" }),
+        {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        }
+      );
     }
 
     // Find user by email
@@ -27,35 +30,56 @@ export default async function handler(req: Request) {
     });
 
     if (!foundUser) {
-      return new Response(JSON.stringify({ error: "Invalid credentials" }), {
-        status: 401,
-        headers: { "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({ error: "Invalid credentials" }),
+        {
+          status: 401,
+          headers: { "Content-Type": "application/json" },
+        }
+      );
     }
 
-    // Find account with password
+    // Find account with password (ensure password field exists)
     const foundAccount = await db.query.account.findFirst({
       where: eq(account.userId, foundUser.id),
     });
 
-    if (!foundAccount || !foundAccount.password) {
-      return new Response(JSON.stringify({ error: "Invalid credentials" }), {
-        status: 401,
-        headers: { "Content-Type": "application/json" },
-      });
+    if (!foundAccount) {
+      return new Response(
+        JSON.stringify({ error: "Invalid credentials" }),
+        {
+          status: 401,
+          headers: { "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    const { password: hashedPassword } = foundAccount;
+
+    if (!hashedPassword) {
+      return new Response(
+        JSON.stringify({ error: "Invalid credentials" }),
+        {
+          status: 401,
+          headers: { "Content-Type": "application/json" },
+        }
+      );
     }
 
     // Verify password
-    const validPassword = await verifyPassword(password, foundAccount.password);
+    const validPassword = await verifyPassword(password, hashedPassword);
 
     if (!validPassword) {
-      return new Response(JSON.stringify({ error: "Invalid credentials" }), {
-        status: 401,
-        headers: { "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({ error: "Invalid credentials" }),
+        {
+          status: 401,
+          headers: { "Content-Type": "application/json" },
+        }
+      );
     }
 
-    // Return user info (without password)
+    // Return user info (without sensitive fields)
     return new Response(
       JSON.stringify({
         user: {
@@ -76,9 +100,12 @@ export default async function handler(req: Request) {
     );
   } catch (error) {
     console.error("Sign-in error:", error);
-    return new Response(JSON.stringify({ error: "Internal server error" }), {
-      status: 500,
-      headers: { "Content-Type": "application/json" },
-    });
+    return new Response(
+      JSON.stringify({ error: "Internal server error" }),
+      {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      }
+    );
   }
 }

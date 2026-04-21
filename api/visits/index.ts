@@ -1,7 +1,7 @@
-import { requireAuth, badRequest, serverError, forbidden } from "../../src/lib/api/middleware";
-import { db, visit, inspection, photo, worker, site } from "../../src/lib/db";
+import { requireAuth, badRequest, serverError, forbidden } from "../../src/lib/api/middleware.js";
+import { db, visit, inspection, photo, worker, site } from "../../src/lib/db/index.js";
 import { eq } from "drizzle-orm";
-import { v4 as uuid } from "uuid";
+import { randomUUID } from "crypto";
 
 export default async function handler(req: Request) {
   try {
@@ -122,7 +122,7 @@ export default async function handler(req: Request) {
       }
 
       // Create visit
-      const visitId = uuid();
+      const visitId = randomUUID();
       const timestamp = new Date();
 
       await db.insert(visit).values({
@@ -139,7 +139,7 @@ export default async function handler(req: Request) {
       // Create inspection if provided
       let inspectionData = null;
       if (inspectionType) {
-        const inspectionId = uuid();
+        const inspectionId = randomUUID();
         inspectionData = {
           id: inspectionId,
           type: inspectionType,
@@ -161,7 +161,7 @@ export default async function handler(req: Request) {
         const photosData: { id: string; dataUrl: string; caption: string | null }[] = [];
         if (photos && Array.isArray(photos)) {
           for (const p of photos) {
-            const photoId = uuid();
+            const photoId = randomUUID();
             await db.insert(photo).values({
               id: photoId,
               inspectionId,

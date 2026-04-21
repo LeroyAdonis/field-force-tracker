@@ -1,7 +1,7 @@
-import { requireAuth, badRequest, serverError } from "../../../src/lib/api/middleware";
-import { db, invitation, user, userRole, worker } from "../../../src/lib/db";
+import { requireAuth, badRequest, serverError } from "../../../src/lib/api/middleware.js";
+import { db, invitation, user, userRole, worker } from "../../../src/lib/db/index.js";
 import { eq } from "drizzle-orm";
-import { v4 as uuid } from "uuid";
+import { randomUUID } from "crypto";
 
 export default async function handler(req: Request) {
   const url = new URL(req.url);
@@ -61,7 +61,7 @@ export default async function handler(req: Request) {
 
       if (!userRoleRecord) {
         // Create user role based on invitation
-        const userRoleId = uuid();
+        const userRoleId = randomUUID();
         await db.insert(userRole).values({
           id: userRoleId,
           userId: authUser.id,
@@ -87,7 +87,7 @@ export default async function handler(req: Request) {
 
       // If role is worker, create worker record
       if (inv.role === "worker" && !userRoleRecord.worker) {
-        const workerId = uuid();
+        const workerId = randomUUID();
         await db.insert(worker).values({
           id: workerId,
           userRoleId: userRoleRecord.id,

@@ -1,7 +1,7 @@
-import { requireAuth, requireRole, forbidden, badRequest, serverError } from "../../src/lib/api/middleware";
-import { db, worker, userRole } from "../../src/lib/db";
+import { requireAuth, requireRole, forbidden, badRequest, serverError } from "../../src/lib/api/middleware.js";
+import { db, worker, userRole } from "../../src/lib/db/index.js";
 import { eq } from "drizzle-orm";
-import { v4 as uuid } from "uuid";
+import { randomUUID } from "crypto";
 
 export default async function handler(req: Request) {
   try {

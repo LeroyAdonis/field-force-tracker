@@ -1,6 +1,6 @@
-import { requireAuth, requireRole, forbidden, badRequest, serverError } from "../../src/lib/api/middleware";
-import { db, site } from "../../src/lib/db";
-import { v4 as uuid } from "uuid";
+import { requireAuth, requireRole, forbidden, badRequest, serverError } from "../../src/lib/api/middleware.js";
+import { db, site } from "../../src/lib/db/index.js";
+import { randomUUID } from "crypto";
 
 export default async function handler(req: Request) {
   try {
@@ -35,7 +35,7 @@ export default async function handler(req: Request) {
       }
 
       const newSite = {
-        id: uuid(),
+        id: randomUUID(),
         name,
         address,
         zone,

@@ -1,7 +1,7 @@
-import { requireAuth, requireRole, badRequest, serverError, forbidden } from "../../../src/lib/api/middleware";
-import { db, invitation, userRole } from "../../../src/lib/db";
+import { requireAuth, requireRole, badRequest, serverError, forbidden } from "../../../src/lib/api/middleware.js";
+import { db, invitation, userRole } from "../../../src/lib/db/index.js";
 import { eq, isNull, gt } from "drizzle-orm";
-import { v4 as uuid } from "uuid";
+import { randomUUID } from "crypto";
 
 export default async function handler(req: Request) {
   try {
@@ -58,8 +58,8 @@ export default async function handler(req: Request) {
       }
 
       // Create invitation
-      const invitationId = uuid();
-      const token = uuid();
+      const invitationId = randomUUID();
+      const token = randomUUID();
       const expiresAt = new Date();
       expiresAt.setDate(expiresAt.getDate() + 7); // 7 days
 

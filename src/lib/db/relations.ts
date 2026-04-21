@@ -1,5 +1,5 @@
 import { relations } from "drizzle-orm/relations";
-import { visit, inspection, user, userRole, photo, session, invitation, account, worker, site } from "./schema";
+import { visit, inspection, user, userRole, photo, session, invitation, account, worker, site } from "./schema.js";
 
 export const inspectionRelations = relations(inspection, ({one, many}) => ({
 	visit: one(visit, {

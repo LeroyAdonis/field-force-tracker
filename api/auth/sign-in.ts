@@ -1,4 +1,4 @@
-import { db, user, account } from "../../src/lib/db";
+import { db, user, account } from "../../src/lib/db/index.js";
 import { eq } from "drizzle-orm";
 import { verifyPassword } from "better-auth/crypto";
 

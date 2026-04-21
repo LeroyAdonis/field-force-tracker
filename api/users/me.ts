@@ -1,5 +1,5 @@
-import { requireAuth } from "../../src/lib/api/middleware";
-import { db, userRole, worker } from "../../src/lib/db";
+import { requireAuth } from "../../src/lib/api/middleware.js";
+import { db, userRole, worker } from "../../src/lib/db/index.js";
 import { eq } from "drizzle-orm";
 
 export default async function handler(req: Request) {

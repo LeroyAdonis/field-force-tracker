@@ -14,18 +14,6 @@ import {
 import { toast } from "@/hooks/use-toast";
 import { Compass, ArrowRight, Eye, EyeOff, Lock, Mail, ShieldCheck, Activity } from "lucide-react";
 
-/**
- * Demo-only credential validator.
- * In production, replace this function with a real auth service call
- * (e.g. Firebase Auth, Cognito, or custom JWT endpoint).
- * Currently accepts any password — the check is a no-op scaffold.
- */
-function validateCredentials(_email: string, _password: string): boolean {
-  // TODO: Replace with real authentication service.
-  // For demo mode, any password is accepted.
-  return true;
-}
-
 function ForgotPasswordDialog() {
   const [resetEmail, setResetEmail] = useState("");
   const [submitted, setSubmitted] = useState(false);
@@ -102,54 +90,87 @@ function ForgotPasswordDialog() {
 
 export default function Login() {
   const navigate = useNavigate();
-  const loginAs = useApp(s => s.loginAs);
-  const workers = useApp(s => s.workers);
+  const setUser = useApp(s => s.setUser);
   const [email, setEmail] = useState("admin@kinetic.enterprise");
   const [pass, setPass] = useState("demo");
   const [showPass, setShowPass] = useState(false);
   const [error, setError] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
 
   const isValidEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    setIsLoading(true);
 
-    // Email format validation
     if (!isValidEmail(email)) {
       setError("Please enter a valid email address");
+      setIsLoading(false);
       return;
     }
 
-    const isAdmin = email.toLowerCase().startsWith("admin");
-    if (isAdmin) {
-      // TODO: Replace validateCredentials with real auth check in production
-      validateCredentials(email, pass);
-      loginAs("admin");
-      navigate("/admin");
-      return;
-    }
+    try {
+      const response = await fetch("/api/auth/sign-in", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password: pass }),
+      });
 
-    const w = workers.find(w => w.email.toLowerCase() === email.toLowerCase());
-    if (!w) {
-      setError("No account found for this email");
-      return;
-    }
+      if (!response.ok) {
+        const data = await response.json();
+        setError(data.error || "Invalid credentials");
+        setIsLoading(false);
+        return;
+      }
 
-    // TODO: Replace validateCredentials with real auth check in production
-    validateCredentials(email, pass);
-    loginAs("worker", w.id);
-    navigate("/worker");
+      // Fetch user profile and redirect based on role
+      const userRes = await fetch("/api/users/me");
+      if (userRes.ok) {
+        const userData = await userRes.json();
+        setUser(userData);
+        navigate(userData.role === "admin" ? "/admin" : "/worker");
+      } else {
+        navigate("/worker");
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Login failed");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const quick = (mail: string) => {
+  const quick = async (mail: string) => {
     setEmail(mail);
     setError("");
-    const isAdmin = mail.toLowerCase().startsWith("admin");
-    if (isAdmin) { loginAs("admin"); navigate("/admin"); return; }
-    const w = workers.find(w => w.email.toLowerCase() === mail.toLowerCase());
-    loginAs("worker", w?.id);
-    navigate("/worker");
+    setIsLoading(true);
+
+    try {
+      const response = await fetch("/api/auth/sign-in", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: mail, password: "demo" }),
+      });
+
+      if (!response.ok) {
+        setError("Demo login failed");
+        setIsLoading(false);
+        return;
+      }
+
+      const userRes = await fetch("/api/users/me");
+      if (userRes.ok) {
+        const userData = await userRes.json();
+        setUser(userData);
+        navigate(userData.role === "admin" ? "/admin" : "/worker");
+      } else {
+        navigate("/worker");
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Login failed");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -205,29 +226,25 @@ export default function Login() {
                   {showPass ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
-              {/* Demo-only indicator — auth is not enforced */}
-              <p className="mt-1.5 text-[11px] text-foreground-muted/60 italic">
-                Demo mode — any password is accepted
-              </p>
             </div>
 
-            <Button type="submit" size="lg" className="w-full">
-              Sign In to Dashboard <ArrowRight className="h-4 w-4" />
+            <Button type="submit" size="lg" className="w-full" disabled={isLoading}>
+              {isLoading ? "Signing in..." : "Sign In to Dashboard"} {!isLoading && <ArrowRight className="h-4 w-4" />}
             </Button>
           </form>
 
           <div className="mt-10 pt-6 border-t border-border/60">
             <div className="label-eyebrow mb-3">Demo Access</div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-              <button onClick={() => quick("admin@kinetic.enterprise")} className="surface-recessed text-left p-3 hover:bg-surface-high transition-colors">
+              <button onClick={() => quick("admin@kinetic.enterprise")} disabled={isLoading} className="surface-recessed text-left p-3 hover:bg-surface-high transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                 <div className="text-xs font-bold">Admin</div>
                 <div className="text-[11px] text-foreground-muted truncate">Eleanor Vance</div>
               </button>
-              <button onClick={() => quick("marcus@kinetic.enterprise")} className="surface-recessed text-left p-3 hover:bg-surface-high transition-colors">
+              <button onClick={() => quick("marcus@kinetic.enterprise")} disabled={isLoading} className="surface-recessed text-left p-3 hover:bg-surface-high transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                 <div className="text-xs font-bold">Worker</div>
                 <div className="text-[11px] text-foreground-muted truncate">Marcus Kane</div>
               </button>
-              <button onClick={() => quick("sarah@kinetic.enterprise")} className="surface-recessed text-left p-3 hover:bg-surface-high transition-colors">
+              <button onClick={() => quick("sarah@kinetic.enterprise")} disabled={isLoading} className="surface-recessed text-left p-3 hover:bg-surface-high transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                 <div className="text-xs font-bold">Worker · Risk</div>
                 <div className="text-[11px] text-foreground-muted truncate">Sarah Miller</div>
               </button>

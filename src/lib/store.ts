@@ -18,6 +18,7 @@ interface AppState {
   visits: Visit[];
   dailyVisitsTarget: number;
 
+  setUser: (user: SessionUser | null) => void;
   loginAs: (role: Role, workerId?: string) => void;
   logout: () => void;
 
@@ -49,6 +50,7 @@ export const useApp = create<AppState>((set, get) => ({
   visits: seedVisits,
   dailyVisitsTarget: DEFAULT_DAILY_VISITS,
 
+  setUser: (user) => set({ user }),
   loginAs: (role, workerId) => {
     if (role === "admin") return set({ user: adminUser });
     const w = get().workers.find(x => x.id === workerId) ?? get().workers[0];

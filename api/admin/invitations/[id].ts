@@ -1,7 +1,7 @@
 import { requireAuth, badRequest, serverError } from "../../../src/lib/api/middleware";
 import { db, invitation, user, userRole, worker } from "../../../src/lib/db";
 import { eq } from "drizzle-orm";
-import { v4 as uuid } from "crypto";
+import { v4 as uuid } from "uuid";
 
 export default async function handler(req: Request) {
   const url = new URL(req.url);

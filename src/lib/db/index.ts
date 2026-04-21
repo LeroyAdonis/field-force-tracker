@@ -1,7 +1,7 @@
 import { drizzle } from "drizzle-orm/neon-http";
 import { config } from "dotenv";
-import * as schema from "./schema";
-import * as relations from "./relations";
+import * as schema from "./schema.js";
+import * as relations from "./relations.js";
 
 // Load environment variables from .env.local
 config({ path: ".env.local" });
@@ -15,5 +15,5 @@ export const db = drizzle(process.env.DATABASE_URL, {
   logger: process.env.NODE_ENV === "development",
 });
 
-export * from "./schema";
-export * from "./relations";
+export * from "./schema.js";
+export * from "./relations.js";

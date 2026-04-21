@@ -101,8 +101,8 @@ export const invitation = pgTable("invitation", {
 	index("invitation_token_idx").using("btree", table.token.asc().nullsLast().op("text_ops")),
 	foreignKey({
 			columns: [table.createdBy],
-			foreignColumns: [userRole.id],
-			name: "invitation_createdBy_userRole_id_fk"
+			foreignColumns: [user.id],
+			name: "invitation_createdBy_user_id_fk"
 		}).onDelete("restrict"),
 	unique("invitation_token_unique").on(table.token),
 ]);
@@ -190,7 +190,7 @@ export const worker = pgTable("worker", {
 	index("worker_userRoleId_idx").using("btree", table.userRoleId.asc().nullsLast().op("text_ops")),
 	foreignKey({
 			columns: [table.userRoleId],
-			foreignColumns: [userRole.id],
+			foreignColumns: [user.id],
 			name: "worker_userRoleId_userRole_id_fk"
 		}).onDelete("cascade"),
 	unique("worker_userRoleId_unique").on(table.userRoleId),

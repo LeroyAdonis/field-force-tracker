@@ -101,8 +101,8 @@ export const invitation = pgTable("invitation", {
 	index("invitation_token_idx").using("btree", table.token.asc().nullsLast().op("text_ops")),
 	foreignKey({
 			columns: [table.createdBy],
-			foreignColumns: [userRole.id],
-			name: "invitation_createdBy_userRole_id_fk"
+			foreignColumns: [user.id],
+			name: "invitation_createdBy_user_id_fk"
 		}).onDelete("restrict"),
 	unique("invitation_token_unique").on(table.token),
 ]);

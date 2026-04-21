@@ -1,5 +1,5 @@
-import { requireAuth, badRequest, serverError, forbidden } from "../../src/lib/api/middleware.js";
-import { db, visit, worker, inspection, photo } from "../../src/lib/db.js";
+import { requireAuth, badRequest, serverError, forbidden } from "../../src/lib/api/middleware";
+import { db, visit, worker, inspection, photo } from "../../src/lib/db";
 import { eq } from "drizzle-orm";
 
 export default async function handler(req: Request) {

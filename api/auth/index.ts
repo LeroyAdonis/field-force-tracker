@@ -1,4 +1,4 @@
-import { auth } from "../../src/lib/auth.js";
+import { auth } from "../../src/lib/auth";
 
 export default async function handler(req: Request) {
   try {

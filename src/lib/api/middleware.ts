@@ -1,5 +1,5 @@
-import { auth } from "../auth.js";
-import { db, userRole } from "../db.js";
+import { auth } from "../auth";
+import { db, userRole } from "../db";
 import { eq } from "drizzle-orm";
 
 export interface AuthUser {

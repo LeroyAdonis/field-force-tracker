@@ -1,5 +1,5 @@
-import { requireAuth, requireRole, forbidden, badRequest, serverError } from "../../src/lib/api/middleware.js";
-import { db, worker, userRole } from "../../src/lib/db.js";
+import { requireAuth, requireRole, forbidden, badRequest, serverError } from "../../src/lib/api/middleware";
+import { db, worker, userRole } from "../../src/lib/db";
 import { eq } from "drizzle-orm";
 import { v4 as uuid } from "uuid";
 

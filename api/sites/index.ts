@@ -1,5 +1,5 @@
-import { requireAuth, requireRole, forbidden, badRequest, serverError } from "../../src/lib/api/middleware.js";
-import { db, site } from "../../src/lib/db.js";
+import { requireAuth, requireRole, forbidden, badRequest, serverError } from "../../src/lib/api/middleware";
+import { db, site } from "../../src/lib/db";
 import { v4 as uuid } from "uuid";
 
 export default async function handler(req: Request) {

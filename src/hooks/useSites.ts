@@ -1,83 +1,27 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-
-export interface SiteData {
-  id: string;
-  name: string;
-  address: string;
-  zone: string;
-  active: boolean;
-}
+import { useApp } from "@/lib/store";
+import { Site } from "@/lib/types";
 
 export function useSites() {
-  return useQuery<SiteData[]>({
-    queryKey: ["sites"],
-    queryFn: async () => {
-      const response = await fetch("/api/sites");
-      if (!response.ok) throw new Error("Failed to fetch sites");
-      return response.json();
-    },
-  });
+  const sites = useApp((s) => s.sites);
+  return { data: sites, isLoading: false, error: null, refetch: () => {} };
 }
 
 export function useSite(id: string) {
-  return useQuery<SiteData>({
-    queryKey: ["sites", id],
-    queryFn: async () => {
-      const response = await fetch(`/api/sites/${id}`);
-      if (!response.ok) throw new Error("Failed to fetch site");
-      return response.json();
-    },
-  });
+  const sites = useApp((s) => s.sites);
+  return { data: sites.find(s => s.id === id), isLoading: false, error: null };
 }
 
 export function useAddSite() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (site: Omit<SiteData, "id">) => {
-      const response = await fetch("/api/sites", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(site),
-      });
-      if (!response.ok) throw new Error("Failed to add site");
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["sites"] });
-    },
-  });
+  const addSite = useApp((s) => s.addSite);
+  return { mutate: addSite, isLoading: false };
 }
 
 export function useUpdateSite() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async ({ id, updates }: { id: string; updates: Partial<SiteData> }) => {
-      const response = await fetch(`/api/sites/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(updates),
-      });
-      if (!response.ok) throw new Error("Failed to update site");
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["sites"] });
-    },
-  });
+  const updateSite = useApp((s) => s.updateSite);
+  return { mutate: ({ id, updates }: { id: string; updates: Partial<Site> }) => updateSite(id, updates), isLoading: false };
 }
 
 export function useDeleteSite() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (id: string) => {
-      const response = await fetch(`/api/sites/${id}`, {
-        method: "DELETE",
-      });
-      if (!response.ok) throw new Error("Failed to delete site");
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["sites"] });
-    },
-  });
+  const removeSite = useApp((s) => s.removeSite);
+  return { mutate: removeSite, isLoading: false };
 }

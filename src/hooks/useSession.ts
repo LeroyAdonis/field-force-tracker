@@ -16,38 +16,7 @@ interface SessionUser {
 }
 
 export function useSession() {
-  const [loading, setLoading] = useState(true);
-  const setUser = useApp((s) => s.setUser);
-
-  useEffect(() => {
-    const restoreSession = async () => {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 20_000);
-      try {
-        const response = await fetch("/api/users/me", { signal: controller.signal });
-        clearTimeout(timer);
-        if (response.ok) {
-          const userData: SessionUser = await response.json();
-          setUser({
-            id: userData.id,
-            name: userData.name || userData.displayName || "",
-            email: userData.email,
-            avatar: userData.avatar || "",
-            role: userData.role as "admin" | "worker",
-            title: userData.jobTitle || userData.role,
-            workerId: userData.workerId,
-            dailyKmTarget: userData.dailyKmTarget ?? undefined,
-          });
-        }
-      } catch {
-        clearTimeout(timer);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    restoreSession();
-  }, [setUser]);
-
+  const [loading, setLoading] = useState(false);
+  
   return { loading };
 }

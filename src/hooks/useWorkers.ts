@@ -1,4 +1,5 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useApp } from "@/lib/store";
+import { Worker } from "@/lib/types";
 
 export interface WorkerData {
   id: string;
@@ -12,76 +13,40 @@ export interface WorkerData {
   isDemo: boolean;
 }
 
+const mapWorker = (w: Worker): WorkerData => ({
+  id: w.id,
+  userId: w.id, // Assuming same for now
+  email: w.email,
+  displayName: w.name,
+  avatar: w.avatar,
+  jobTitle: w.role,
+  dailyKmTarget: w.dailyKmTarget,
+  active: w.active,
+  isDemo: false,
+});
+
 export function useWorkers() {
-  return useQuery<WorkerData[]>({
-    queryKey: ["workers"],
-    queryFn: async () => {
-      const response = await fetch("/api/workers");
-      if (!response.ok) throw new Error("Failed to fetch workers");
-      return response.json();
-    },
-  });
+  const workers = useApp((s) => s.workers);
+  return { data: workers.map(mapWorker), isLoading: false, error: null, refetch: () => {} };
 }
 
 export function useWorker(id: string) {
-  return useQuery<WorkerData>({
-    queryKey: ["workers", id],
-    queryFn: async () => {
-      const response = await fetch(`/api/workers/${id}`);
-      if (!response.ok) throw new Error("Failed to fetch worker");
-      return response.json();
-    },
-  });
+  const workers = useApp((s) => s.workers);
+  const worker = workers.find(w => w.id === id);
+  return { data: worker ? mapWorker(worker) : undefined, isLoading: false, error: null };
 }
 
 export function useAddWorker() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (worker: Omit<WorkerData, "id" | "userId">) => {
-      const response = await fetch("/api/workers", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(worker),
-      });
-      if (!response.ok) throw new Error("Failed to add worker");
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["workers"] });
-    },
-  });
+  const addWorker = useApp((s) => s.addWorker);
+  return { mutate: (worker: Omit<Worker, "id">) => addWorker(worker), isLoading: false };
 }
 
 export function useUpdateWorker() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async ({ id, updates }: { id: string; updates: Partial<WorkerData> }) => {
-      const response = await fetch(`/api/workers/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(updates),
-      });
-      if (!response.ok) throw new Error("Failed to update worker");
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["workers"] });
-    },
-  });
+  const updateWorker = useApp((s) => s.updateWorker);
+  return { mutate: ({ id, updates }: { id: string; updates: Partial<Worker> }) => updateWorker(id, updates), isLoading: false };
 }
 
 export function useDeleteWorker() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (id: string) => {
-      const response = await fetch(`/api/workers/${id}`, {
-        method: "DELETE",
-      });
-      if (!response.ok) throw new Error("Failed to delete worker");
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["workers"] });
-    },
-  });
+  const removeWorker = useApp((s) => s.removeWorker);
+  return { mutate: removeWorker, isLoading: false };
 }

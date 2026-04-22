@@ -67,7 +67,7 @@ export default async function handler(req: Request): Promise<Response> {
     }
 
     // Verify password
-    const validPassword = await verifyPassword(password, hashedPassword);
+    const validPassword = await verifyPassword({ password, hash: hashedPassword });
 
     if (!validPassword) {
       return new Response(

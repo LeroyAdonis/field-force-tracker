@@ -8,9 +8,10 @@ import {
   DrawerFooter,
 } from "@/components/ui/drawer";
 import { Button } from "@/components/ui/button";
-import { useApp } from "@/lib/store";
+import { useVisits } from "@/hooks/useVisits";
+import { useSites } from "@/hooks/useSites";
 import type { Worker } from "@/lib/types";
-import { Mail, Target, MapPin, Route, ClipboardCheck, Send } from "lucide-react";
+import { Mail, Target, MapPin, ClipboardCheck, Send } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface WorkerDetailDrawerProps {
@@ -19,55 +20,29 @@ interface WorkerDetailDrawerProps {
   worker: Worker | null;
 }
 
-/**
- * Drawer component showing worker profile with KPI summary
- * computed from store visits data, recent visits list, and action buttons.
- */
-export function WorkerDetailDrawer({
-  open,
-  onOpenChange,
-  worker,
-}: WorkerDetailDrawerProps) {
-  const { visits, sites } = useApp();
+export function WorkerDetailDrawer({ open, onOpenChange, worker }: WorkerDetailDrawerProps) {
+  const { data: visitsData = [] } = useVisits();
+  const { data: sitesData = [] } = useSites();
   const { toast } = useToast();
 
-  // Compute KPI summary from visits
   const kpiSummary = useMemo(() => {
     if (!worker) return { totalVisits: 0, totalKm: 0, recentVisits: [] };
-
-    const workerVisits = visits.filter((v) => v.workerId === worker.id);
+    const workerVisits = visitsData.filter((v) => v.workerId === worker.id);
     const totalVisits = workerVisits.length;
-    const totalKm = workerVisits.reduce((sum, v) => sum + v.km, 0);
-
-    // Sort by timestamp descending and take last 5
+    const totalKm = workerVisits.reduce(
+      (sum, v) => sum + (typeof v.km === "string" ? parseFloat(v.km) : (v.km ?? 0)),
+      0
+    );
     const recentVisits = [...workerVisits]
       .sort((a, b) => b.timestamp.localeCompare(a.timestamp))
       .slice(0, 5);
-
     return { totalVisits, totalKm, recentVisits };
-  }, [worker, visits]);
+  }, [worker, visitsData]);
 
   if (!worker) return null;
 
   const handleSendReminder = () => {
-    toast({
-      title: "Reminder Sent",
-      description: `A reminder has been sent to ${worker.name}.`,
-    });
-  };
-
-  const handleViewAllVisits = () => {
-    onOpenChange(false);
-    // Navigate to visit history — will be wired up in Phase 2
-    window.location.href = `/worker/history?workerId=${worker.id}`;
-  };
-
-  const formatDate = (iso: string) => {
-    try {
-      return new Date(iso).toLocaleDateString();
-    } catch {
-      return iso;
-    }
+    toast({ title: "Reminder Sent", description: `A reminder has been sent to ${worker.name}.` });
   };
 
   return (
@@ -79,14 +54,12 @@ export function WorkerDetailDrawer({
         </DrawerHeader>
 
         <div className="space-y-6 overflow-y-auto px-4 pb-4">
-          {/* Worker info */}
           <div className="grid gap-3">
             <div className="flex items-center gap-2 text-sm">
               <Mail className="h-4 w-4 text-muted-foreground" />
               <span className="text-muted-foreground">Email:</span>
               <span>{worker.email}</span>
             </div>
-
             <div className="flex items-center gap-2 text-sm">
               <Target className="h-4 w-4 text-muted-foreground" />
               <span className="text-muted-foreground">Daily KM Target:</span>
@@ -94,7 +67,6 @@ export function WorkerDetailDrawer({
             </div>
           </div>
 
-          {/* KPI Summary */}
           <div className="grid grid-cols-2 gap-3">
             <div className="rounded-lg border p-3 text-center">
               <div className="text-2xl font-bold">{kpiSummary.totalVisits}</div>
@@ -106,26 +78,25 @@ export function WorkerDetailDrawer({
             </div>
           </div>
 
-          {/* Recent visits */}
           {kpiSummary.recentVisits.length > 0 && (
             <div className="space-y-2">
               <h4 className="text-sm font-semibold">Recent Visits</h4>
               <div className="divide-y rounded-lg border">
-                {kpiSummary.recentVisits.map((visit) => {
-                  const site = sites.find((s) => s.id === visit.siteId);
+                {kpiSummary.recentVisits.map((v) => {
+                  const site = sitesData.find((s) => s.id === v.siteId);
                   return (
-                    <div key={visit.id} className="flex items-center gap-3 px-3 py-2">
+                    <div key={v.id} className="flex items-center gap-3 px-3 py-2">
                       <MapPin className="h-4 w-4 shrink-0 text-muted-foreground" />
                       <div className="flex-1 min-w-0">
                         <p className="truncate text-sm font-medium">
-                          {site?.name ?? "Unknown Site"}
+                          {site?.name ?? v.siteName ?? "Unknown Site"}
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          {formatDate(visit.date)} · {visit.km} km
+                          {v.date} · {v.km} km
                         </p>
                       </div>
                       <span className="shrink-0 text-xs text-muted-foreground">
-                        {visit.inspection.type}
+                        {v.inspection?.type ?? "—"}
                       </span>
                     </div>
                   );
@@ -140,7 +111,7 @@ export function WorkerDetailDrawer({
             <Send className="h-4 w-4" />
             Send Reminder
           </Button>
-          <Button variant="default" onClick={handleViewAllVisits}>
+          <Button variant="default" onClick={() => { onOpenChange(false); window.location.href = `/worker/history?workerId=${worker.id}`; }}>
             <ClipboardCheck className="h-4 w-4" />
             View All Visits
           </Button>

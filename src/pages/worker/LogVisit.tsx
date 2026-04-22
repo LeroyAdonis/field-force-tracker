@@ -124,7 +124,7 @@ export default function LogVisit() {
     if (!isFormValid || !siteId) return;
 
     addVisitMutation.mutate({
-      workerId: user.id,
+      workerId: user.workerId ?? user.id,
       siteId,
       date: todayISO,
       km: parseFloat(km),

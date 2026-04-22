@@ -23,7 +23,7 @@ export default async function handler(req: Request) {
               },
             },
             site: true,
-            inspection: {
+            inspections: {
               with: {
                 photos: true,
               },
@@ -56,7 +56,7 @@ export default async function handler(req: Request) {
               },
             },
             site: true,
-            inspection: {
+            inspections: {
               with: {
                 photos: true,
               },
@@ -65,31 +65,34 @@ export default async function handler(req: Request) {
         });
       }
 
-      const response = visits.map((v) => ({
-        id: v.id,
-        workerId: v.workerId,
-        workerName: v.worker?.userRole?.displayName,
-        siteId: v.siteId,
-        siteName: v.site?.name,
-        date: v.date,
-        timestamp: v.timestamp,
-        km: v.km,
-        inspection: v.inspection
-          ? {
-              id: v.inspection.id,
-              type: v.inspection.type,
-              notes: v.inspection.notes,
-              timestamp: v.inspection.timestamp,
-              photos: v.inspection.photos.map((p) => ({
-                id: p.id,
-                dataUrl: p.dataUrl,
-                caption: p.caption,
-              })),
-            }
-          : null,
-        createdAt: v.createdAt,
-        updatedAt: v.updatedAt,
-      }));
+      const response = visits.map((v) => {
+        const inspectionRecord = v.inspections?.[0];
+        return {
+          id: v.id,
+          workerId: v.workerId,
+          workerName: v.worker?.userRole?.displayName,
+          siteId: v.siteId,
+          siteName: v.site?.name,
+          date: v.date,
+          timestamp: v.timestamp,
+          km: v.km,
+          inspection: inspectionRecord
+            ? {
+                id: inspectionRecord.id,
+                type: inspectionRecord.type,
+                notes: inspectionRecord.notes,
+                timestamp: inspectionRecord.timestamp,
+                photos: inspectionRecord.photos.map((p) => ({
+                  id: p.id,
+                  dataUrl: p.dataUrl,
+                  caption: p.caption,
+                })),
+              }
+            : null,
+          createdAt: v.createdAt,
+          updatedAt: v.updatedAt,
+        };
+      });
 
       return new Response(JSON.stringify(response), {
         status: 200,
@@ -123,42 +126,41 @@ export default async function handler(req: Request) {
 
       // Create visit
       const visitId = randomUUID();
-      const timestamp = new Date();
+      const nowIso = new Date().toISOString();
 
       await db.insert(visit).values({
         id: visitId,
         workerId,
         siteId,
         date,
-        timestamp,
+        timestamp: nowIso,
         km,
-        createdAt: timestamp,
-        updatedAt: timestamp,
+        createdAt: nowIso,
+        updatedAt: nowIso,
       });
 
       // Create inspection if provided
-      let inspectionData = null;
+      let inspectionData: {
+        id: string;
+        type: string;
+        notes: string | null;
+        timestamp: string;
+        photos: { id: string; dataUrl: string; caption: string | null }[];
+      } | null = null;
       if (inspectionType) {
         const inspectionId = randomUUID();
-        inspectionData = {
-          id: inspectionId,
-          type: inspectionType,
-          notes: notes || null,
-          timestamp,
-        };
+        const photosData: { id: string; dataUrl: string; caption: string | null }[] = [];
 
         await db.insert(inspection).values({
           id: inspectionId,
           visitId,
           type: inspectionType,
           notes: notes || null,
-          timestamp,
-          createdAt: timestamp,
-          updatedAt: timestamp,
+          timestamp: nowIso,
+          createdAt: nowIso,
+          updatedAt: nowIso,
         });
 
-        // Create photos if provided
-        const photosData: { id: string; dataUrl: string; caption: string | null }[] = [];
         if (photos && Array.isArray(photos)) {
           for (const p of photos) {
             const photoId = randomUUID();
@@ -167,7 +169,7 @@ export default async function handler(req: Request) {
               inspectionId,
               dataUrl: p.dataUrl,
               caption: p.caption || null,
-              createdAt: timestamp,
+              createdAt: nowIso,
             });
             photosData.push({
               id: photoId,
@@ -177,7 +179,13 @@ export default async function handler(req: Request) {
           }
         }
 
-        inspectionData.photos = photosData;
+        inspectionData = {
+          id: inspectionId,
+          type: inspectionType,
+          notes: notes || null,
+          timestamp: nowIso,
+          photos: photosData,
+        };
       }
 
       // Fetch site for response
@@ -191,11 +199,11 @@ export default async function handler(req: Request) {
         siteId,
         siteName: siteRecord?.name,
         date,
-        timestamp,
+        timestamp: nowIso,
         km,
         inspection: inspectionData,
-        createdAt: timestamp,
-        updatedAt: timestamp,
+        createdAt: nowIso,
+        updatedAt: nowIso,
       };
 
       return new Response(JSON.stringify(response), {

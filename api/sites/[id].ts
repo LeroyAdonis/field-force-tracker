@@ -62,7 +62,7 @@ export default async function handler(req: Request) {
       if (address !== undefined) updates.address = address;
       if (zone !== undefined) updates.zone = zone;
       if (active !== undefined) updates.active = active;
-      updates.updatedAt = new Date();
+      updates.updatedAt = new Date().toISOString();
 
       await db.update(site).set(updates).where(eq(site.id, id));
 

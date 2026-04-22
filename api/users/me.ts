@@ -18,7 +18,7 @@ export default async function handler(req: Request): Promise<Response> {
       where: eq(userRole.userId, user.userId),
       with: {
         user: true,
-        worker: true,
+        workers: true,
       },
     });
 
@@ -29,6 +29,8 @@ export default async function handler(req: Request): Promise<Response> {
       });
     }
 
+    const workerRecord = userWithWorker.workers?.[0];
+
     // Build response with user + role + worker data
     const response = {
       id: userWithWorker.user?.id ?? null,
@@ -38,11 +40,11 @@ export default async function handler(req: Request): Promise<Response> {
       role: userWithWorker.role,
       displayName: userWithWorker.displayName ?? null,
       active: userWithWorker.active,
-      ...(userWithWorker.worker && {
-        workerId: userWithWorker.worker?.id ?? null,
-        jobTitle: userWithWorker.worker?.jobTitle ?? null,
-        dailyKmTarget: userWithWorker.worker?.dailyKmTarget ?? null,
-        isDemo: userWithWorker.worker?.isDemo ?? null,
+      ...(workerRecord && {
+        workerId: workerRecord.id ?? null,
+        jobTitle: workerRecord.jobTitle ?? null,
+        dailyKmTarget: workerRecord.dailyKmTarget ?? null,
+        isDemo: workerRecord.isDemo ?? null,
       }),
     };
 

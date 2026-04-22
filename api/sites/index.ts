@@ -34,14 +34,15 @@ export default async function handler(req: Request) {
         return badRequest("name, address, and zone are required");
       }
 
+      const nowIso = new Date().toISOString();
       const newSite = {
         id: randomUUID(),
         name,
         address,
         zone,
         active: true,
-        createdAt: new Date(),
-        updatedAt: new Date(),
+        createdAt: nowIso,
+        updatedAt: nowIso,
       };
 
       await db.insert(site).values(newSite);

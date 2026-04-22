@@ -8,12 +8,12 @@ type WorkerResponse = {
   email?: string | null;
   displayName?: string | null;
   avatar?: string | null;
-  jobTitle?: string;
-  dailyKmTarget?: number;
-  active?: boolean;
-  isDemo?: boolean;
-  createdAt: string;
-  updatedAt: string;
+  jobTitle?: string | null;
+  dailyKmTarget?: number | null;
+  active?: boolean | null;
+  isDemo?: boolean | null;
+  createdAt: string | null;
+  updatedAt: string | null;
 };
 
 export default async function handler(req: Request): Promise<Response> {
@@ -64,8 +64,8 @@ export default async function handler(req: Request): Promise<Response> {
         dailyKmTarget: w.dailyKmTarget,
         active: w.active,
         isDemo: w.isDemo,
-        createdAt: w.createdAt.toISOString(),
-        updatedAt: w.updatedAt.toISOString(),
+        createdAt: w.createdAt,
+        updatedAt: w.updatedAt,
       };
 
       return new Response(JSON.stringify(response), {
@@ -146,8 +146,8 @@ export default async function handler(req: Request): Promise<Response> {
         dailyKmTarget: updated?.dailyKmTarget,
         active: updated?.active,
         isDemo: updated?.isDemo,
-        createdAt: updated?.createdAt.toISOString(),
-        updatedAt: updated?.updatedAt.toISOString(),
+        createdAt: updated?.createdAt ?? null,
+        updatedAt: updated?.updatedAt ?? null,
       };
 
       return new Response(JSON.stringify(response), {

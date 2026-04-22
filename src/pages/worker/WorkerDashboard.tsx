@@ -1,52 +1,75 @@
 import { useState, useEffect, useCallback } from "react";
 import { useApp } from "@/lib/store";
-import { dailyKpis, statusColor, statusLabel } from "@/lib/kpi";
+import { useVisits, type VisitData } from "@/hooks/useVisits";
+import { useSites } from "@/hooks/useSites";
+import { toVisit } from "@/lib/adapters";
+import { DEFAULT_DAILY_VISITS } from "@/lib/mock-data";
+import { dailyKpis, statusColor } from "@/lib/kpi";
 import { KpiRing } from "@/components/KpiRing";
 import { StatusChip } from "@/components/StatusChip";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
 import { ChevronRight, MapPin, Plus, TrendingUp, Activity, Cloud, RefreshCw } from "lucide-react";
-import { todayISO } from "@/lib/mock-data";
 import { VisitDetailDrawer } from "@/components/VisitDetailDrawer";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import type { Visit } from "@/lib/types";
+import type { Worker } from "@/lib/types";
 
 export default function WorkerDashboard() {
-  const { user, visits, workers, sites, dailyVisitsTarget } = useApp();
-  const [selectedVisit, setSelectedVisit] = useState<Visit | null>(null);
+  const { user } = useApp();
+  const { data: visitsData = [], refetch } = useVisits();
+  const { data: sitesData = [] } = useSites();
+
+  const [selectedVisit, setSelectedVisit] = useState<VisitData | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [refreshCounter, setRefreshCounter] = useState(0);
   const [lastUpdated, setLastUpdated] = useState(() => {
     const now = new Date();
     return `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   });
 
   const handleRefresh = useCallback(() => {
-    setRefreshCounter(c => c + 1);
+    refetch();
     const now = new Date();
     setLastUpdated(`${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`);
-  }, []);
+  }, [refetch]);
 
-  // Auto-refresh every 60s
   useEffect(() => {
     const interval = setInterval(handleRefresh, 60_000);
     return () => clearInterval(interval);
   }, [handleRefresh]);
 
   if (!user || user.role !== "worker") return null;
-  const me = workers.find(w => w.id === user.id)!;
-  const kpi = dailyKpis(me, visits, dailyVisitsTarget);
-  const myToday = visits
-    .filter(v => v.workerId === me.id && v.date === todayISO)
+
+  const todayISO = new Date().toISOString().slice(0, 10);
+
+  // Build a minimal Worker object from session data for KPI computation
+  const me: Worker = {
+    id: user.workerId ?? user.id,
+    name: user.name,
+    email: user.email,
+    role: user.title,
+    avatar: user.avatar,
+    dailyKmTarget: user.dailyKmTarget ?? 60,
+    active: true,
+  };
+
+  const visits = visitsData.map(toVisit);
+  const kpi = dailyKpis(me, visits, DEFAULT_DAILY_VISITS);
+
+  const myToday = visitsData
+    .filter((v) => v.workerId === me.id && v.date === todayISO)
     .sort((a, b) => +new Date(b.timestamp) - +new Date(a.timestamp));
   const recent = myToday.slice(0, 3);
 
   const greet = new Date().getHours() < 12 ? "Morning" : new Date().getHours() < 18 ? "Afternoon" : "Evening";
 
-  const openVisitDetail = (visit: Visit) => {
-    setSelectedVisit(visit);
-    setDrawerOpen(true);
-  };
+  const weekKm = visits
+    .filter((v) => v.workerId === me.id && Date.now() - +new Date(v.timestamp) < 7 * 86400000)
+    .reduce((s, v) => s + v.km, 0)
+    .toFixed(0);
+
+  const monthVisits = visits
+    .filter((v) => v.workerId === me.id && Date.now() - +new Date(v.timestamp) < 30 * 86400000)
+    .length;
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
@@ -59,7 +82,6 @@ export default function WorkerDashboard() {
         </div>
       </div>
 
-      {/* KPI rings */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <TooltipProvider>
           <Tooltip>
@@ -112,22 +134,14 @@ export default function WorkerDashboard() {
         </TooltipProvider>
       </div>
 
-      {/* Last updated + manual refresh */}
       <div className="flex items-center justify-between text-xs text-foreground-muted">
         <span>Last updated: {lastUpdated}</span>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={handleRefresh}
-          className="h-7 gap-1.5 text-xs text-foreground-muted hover:text-foreground"
-        >
+        <Button type="button" variant="ghost" size="sm" onClick={handleRefresh} className="h-7 gap-1.5 text-xs text-foreground-muted hover:text-foreground">
           <RefreshCw className="h-3.5 w-3.5" />
           Refresh
         </Button>
       </div>
 
-      {/* Primary CTA - dark */}
       <Link to="/worker/log" className="block">
         <div className="surface-dark p-6 lg:p-8 flex items-center gap-5 group cursor-pointer hover:scale-[1.005] transition-transform">
           <div className="h-14 w-14 rounded-2xl bg-primary-foreground/10 grid place-items-center backdrop-blur-sm">
@@ -141,7 +155,6 @@ export default function WorkerDashboard() {
         </div>
       </Link>
 
-      {/* Recent activity */}
       <div className="surface-card p-6">
         <div className="flex items-center justify-between mb-4">
           <div>
@@ -156,14 +169,14 @@ export default function WorkerDashboard() {
           </div>
         ) : (
           <div className="space-y-3">
-            {recent.map(v => {
-              const site = sites.find(s => s.id === v.siteId);
+            {recent.map((v) => {
+              const site = sitesData.find((s) => s.id === v.siteId);
               const t = new Date(v.timestamp);
               return (
                 <button
                   key={v.id}
                   type="button"
-                  onClick={() => openVisitDetail(v)}
+                  onClick={() => { setSelectedVisit(v); setDrawerOpen(true); }}
                   className="w-full flex items-start gap-3 p-3 rounded-xl bg-surface-low hover:bg-surface-high transition-colors text-left"
                 >
                   <div className="h-10 w-10 rounded-lg bg-surface-high grid place-items-center shrink-0">
@@ -171,12 +184,12 @@ export default function WorkerDashboard() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-2">
-                      <div className="font-semibold text-sm truncate">{site?.name}</div>
+                      <div className="font-semibold text-sm truncate">{site?.name ?? v.siteName}</div>
                       <div className="text-xs text-foreground-muted tabular-nums">
                         {String(t.getHours()).padStart(2, "0")}:{String(t.getMinutes()).padStart(2, "0")}
                       </div>
                     </div>
-                    <div className="text-xs text-foreground-muted mt-0.5">{v.inspection.type} · {v.km} km</div>
+                    <div className="text-xs text-foreground-muted mt-0.5">{v.inspection?.type} · {v.km} km</div>
                   </div>
                 </button>
               );
@@ -185,30 +198,20 @@ export default function WorkerDashboard() {
         )}
       </div>
 
-      {/* Stats footer */}
       <div className="grid grid-cols-2 gap-4">
         <div className="surface-recessed p-5">
           <div className="flex items-center gap-2 label-eyebrow"><TrendingUp className="h-3.5 w-3.5" />Week to Date</div>
-          <div className="display-num text-3xl mt-2">
-            {visits.filter(v => v.workerId === me.id && (Date.now() - +new Date(v.timestamp)) < 7 * 86400000).length}
-          </div>
+          <div className="display-num text-3xl mt-2">{monthVisits}</div>
           <div className="text-xs text-foreground-muted mt-1">visits logged this week</div>
         </div>
         <div className="surface-recessed p-5">
           <div className="flex items-center gap-2 label-eyebrow"><Activity className="h-3.5 w-3.5" />Month to Date</div>
-          <div className="display-num text-3xl mt-2">
-            {visits.filter(v => v.workerId === me.id && (Date.now() - +new Date(v.timestamp)) < 30 * 86400000).reduce((s, v) => s + v.km, 0).toFixed(0)}
-          </div>
+          <div className="display-num text-3xl mt-2">{weekKm}</div>
           <div className="text-xs text-foreground-muted mt-1">kilometers covered</div>
         </div>
       </div>
 
-      {/* Visit detail drawer */}
-      <VisitDetailDrawer
-        open={drawerOpen}
-        onOpenChange={setDrawerOpen}
-        visit={selectedVisit}
-      />
+      <VisitDetailDrawer open={drawerOpen} onOpenChange={setDrawerOpen} visit={selectedVisit} />
     </div>
   );
 }

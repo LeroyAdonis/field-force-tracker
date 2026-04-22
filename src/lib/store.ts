@@ -9,6 +9,8 @@ interface SessionUser {
   avatar: string;
   role: Role;
   title: string;
+  workerId?: string;
+  dailyKmTarget?: number;
 }
 
 interface AppState {

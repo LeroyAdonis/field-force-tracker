@@ -1,71 +1,97 @@
-import React, { useState } from "react";
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Loader2, MapPin } from "lucide-react";
 
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    setLoading(true);
 
     try {
-      const res = await fetch("/api/auth/sign-in", {
+      const res = await fetch("/api/auth/sign-in/email", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, rememberMe: true }),
       });
 
       if (!res.ok) {
-        const { error } = await res.json();
-        setError(error || "Error logging in");
+        const data = await res.json().catch(() => ({}));
+        setError(data?.message || data?.error || "Invalid email or password.");
         return;
       }
 
-      const { user } = await res.json();
-      console.log("User logged in:", user);
-      window.location.href = "/dashboard";
-    } catch (err) {
-      setError("Network error. Please try again.");
-      console.error("Login error:", err);
+      window.location.href = "/";
+    } catch {
+      setError("Network error — please try again.");
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100">
-      <h1 className="text-2xl font-bold mb-6">Login</h1>
-      <form
-        onSubmit={handleSubmit}
-        className="bg-white p-6 rounded-lg shadow-md w-80 space-y-4"
-      >
-        {error && (
-          <div className="bg-red-100 p-2 text-red-700 text-sm rounded">
-            {error}
+    <div className="min-h-screen flex items-center justify-center bg-background p-4">
+      <div className="w-full max-w-sm">
+        <div className="flex flex-col items-center mb-8">
+          <div className="h-12 w-12 rounded-2xl bg-primary grid place-items-center mb-4">
+            <MapPin className="h-6 w-6 text-primary-foreground" />
           </div>
-        )}
-        <input
-          type="email"
-          placeholder="Email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          required
-          className="border rounded p-2 w-full"
-        />
-        <input
-          type="password"
-          placeholder="Password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          required
-          className="border rounded p-2 w-full"
-        />
-        <button
-          type="submit"
-          className="bg-blue-500 text-white w-full p-2 rounded hover:bg-blue-600"
-        >
-          Sign In
-        </button>
-      </form>
+          <h1 className="text-2xl font-extrabold tracking-tight">Field Force Tracker</h1>
+          <p className="text-sm text-foreground-muted mt-1">Sign in to your account</p>
+        </div>
+
+        <form onSubmit={handleSubmit} className="surface-card p-6 space-y-4">
+          {error && (
+            <div className="rounded-lg bg-destructive/10 border border-destructive/20 px-3 py-2 text-sm text-destructive">
+              {error}
+            </div>
+          )}
+
+          <div className="space-y-1.5">
+            <Label htmlFor="email">Email</Label>
+            <Input
+              id="email"
+              type="email"
+              placeholder="you@example.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              autoComplete="email"
+              disabled={loading}
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="password">Password</Label>
+            <Input
+              id="password"
+              type="password"
+              placeholder="••••••••"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              autoComplete="current-password"
+              disabled={loading}
+            />
+          </div>
+
+          <Button type="submit" className="w-full" disabled={loading}>
+            {loading && <Loader2 className="h-4 w-4 animate-spin" />}
+            {loading ? "Signing in…" : "Sign In"}
+          </Button>
+        </form>
+
+        <p className="text-center text-xs text-foreground-muted mt-6">
+          Contact your administrator if you need access.
+        </p>
+      </div>
     </div>
   );
 }

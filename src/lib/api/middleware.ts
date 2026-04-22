@@ -68,8 +68,8 @@ export function unauthorized(): Response {
   });
 }
 
-export function forbidden(): Response {
-  return new Response(JSON.stringify({ error: "Forbidden" }), {
+export function forbidden(message: string = "Forbidden"): Response {
+  return new Response(JSON.stringify({ error: message }), {
     status: 403,
     headers: { "Content-Type": "application/json" },
   });

@@ -1,7 +1,7 @@
-// Required imports for database models and utilities
-import { db, invitation, userRole } from "../../src/lib/db/index.js";
+import { db, invitation, userRole, worker } from "../../../src/lib/db/index.js";
 import { eq } from "drizzle-orm";
-import { badRequest, forbidden, serverError } from "../../src/lib/api/middleware.js";
+import { randomUUID } from "crypto";
+import { requireAuth, badRequest, forbidden, serverError } from "../../../src/lib/api/middleware.js";
 
 export default async function handler(req: Request): Promise<Response> {
   const url = new URL(req.url);
@@ -13,10 +13,10 @@ export default async function handler(req: Request): Promise<Response> {
 
   try {
     if (req.method === "PATCH") {
+      const authUser = await requireAuth(req);
       const body = await req.json();
-      const { accept } = body;
+      const { accept, displayName, avatar } = body;
 
-      // Fetch the invitation
       const inv = await db.query.invitation.findFirst({
         where: eq(invitation.id, id),
       });
@@ -28,45 +28,50 @@ export default async function handler(req: Request): Promise<Response> {
         });
       }
 
-      // Check if invitation has expired
       if (new Date(inv.expiresAt) < new Date()) {
         return forbidden("Invitation expired");
       }
 
+      if (inv.usedAt) {
+        return forbidden("Invitation already used");
+      }
+
       if (accept) {
-        const userRoleRecord = await db.insert(userRole).values({
-          userId: inv.userId,
+        const nowIso = new Date().toISOString();
+        const roleId = randomUUID();
+
+        await db.insert(userRole).values({
+          id: roleId,
+          userId: authUser.userId,
           role: inv.role,
-          displayName: inv.displayName,
-          avatar: inv.avatar ?? null,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
+          displayName: displayName ?? authUser.name ?? null,
+          avatar: avatar ?? null,
+          active: true,
+          createdAt: nowIso,
+          updatedAt: nowIso,
         });
 
-        // Mark invitation as used
-        await db
-          .update(invitation)
-          .set({ usedAt: new Date().toISOString() })
-          .where(eq(invitation.id, id));
+        if (inv.role === "worker") {
+          await db.insert(worker).values({
+            id: randomUUID(),
+            userRoleId: roleId,
+            jobTitle: null,
+            dailyKmTarget: 60,
+            active: true,
+            isDemo: false,
+            createdAt: nowIso,
+            updatedAt: nowIso,
+          });
+        }
 
-        return new Response(
-          JSON.stringify({
-            message: "Invitation accepted",
-            userRole: userRoleRecord,
-          }),
-          {
-            headers: { "Content-Type": "application/json" },
-          }
-        );
-      } else {
-        return new Response(
-          JSON.stringify({ error: "Invalid action" }),
-          {
-            status: 400,
-            headers: { "Content-Type": "application/json" },
-          }
-        );
+        await db.update(invitation).set({ usedAt: nowIso }).where(eq(invitation.id, id));
+
+        return new Response(JSON.stringify({ message: "Invitation accepted" }), {
+          headers: { "Content-Type": "application/json" },
+        });
       }
+
+      return badRequest("Invalid action");
     }
 
     return new Response(JSON.stringify({ error: "Method not allowed" }), {
@@ -75,6 +80,12 @@ export default async function handler(req: Request): Promise<Response> {
     });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Unknown error";
+    if (message === "Unauthorized") {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
     return serverError(message);
   }
 }

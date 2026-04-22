@@ -25,7 +25,6 @@ export function useSession() {
         const response = await fetch("/api/users/me");
         if (response.ok) {
           const userData: SessionUser = await response.json();
-          // Convert API response to SessionUser format
           setUser({
             id: userData.id,
             name: userData.name || userData.displayName || "",
@@ -33,6 +32,8 @@ export function useSession() {
             avatar: userData.avatar || "",
             role: userData.role as "admin" | "worker",
             title: userData.jobTitle || userData.role,
+            workerId: userData.workerId,
+            dailyKmTarget: userData.dailyKmTarget ?? undefined,
           });
         }
       } catch (error) {

@@ -139,6 +139,7 @@ export const account = pgTable("account", {
 	providerAccountId: text().notNull(),
 	accessToken: text(),
 	refreshToken: text(),
+	password: text(),
 	expiresAt: timestamp({ mode: 'string' }),
 	createdAt: timestamp({ mode: 'string' }).defaultNow(),
 }, (table) => [

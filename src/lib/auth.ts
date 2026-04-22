@@ -30,6 +30,9 @@ export const auth = betterAuth({
   baseURL: siteUrl,
   basePath: "/api/auth",
   trustedOrigins,
+  emailAndPassword: {
+    enabled: true,
+  },
   plugins: [],
   socialProviders: {
     google: {

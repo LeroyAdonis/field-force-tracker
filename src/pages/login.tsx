@@ -3,37 +3,38 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2, MapPin } from "lucide-react";
+import { useApp } from "@/lib/store";
+import { admin, workers } from "@/lib/mock-data";
 
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const loginAs = useApp((state) => state.loginAs);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setLoading(true);
 
-    try {
-      const res = await fetch("/api/auth/sign-in/email", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password, rememberMe: true }),
-      });
+    // Simulate network delay
+    await new Promise((resolve) => setTimeout(resolve, 500));
 
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        setError(data?.message || data?.error || "Invalid email or password.");
+    if (email === admin.email) {
+      loginAs("admin");
+    } else {
+      const worker = workers.find((w) => w.email === email);
+      if (worker) {
+        loginAs("worker", worker.id);
+      } else {
+        setError("Invalid email or password.");
+        setLoading(false);
         return;
       }
-
-      window.location.href = "/";
-    } catch {
-      setError("Network error — please try again.");
-    } finally {
-      setLoading(false);
     }
+
+    window.location.href = "/";
   };
 
   return (

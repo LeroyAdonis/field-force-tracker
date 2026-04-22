@@ -1,4 +1,4 @@
-import express from "express";
+import express, { Request, Response, NextFunction } from "express";
 import { toNodeHandler } from "better-auth/node";
 import { auth } from "./src/lib/auth";
 
@@ -8,10 +8,10 @@ const VITE_PORT = process.env.VITE_PORT || 5173;
 const VITE_URL = `http://localhost:${VITE_PORT}`;
 
 // Custom CORS middleware for credentials: true and OPTIONS
-app.use((req, res, next) => {
+app.use((req: Request, res: Response, next: NextFunction) => {
   const allowedOrigins = ["http://localhost:5173", "http://localhost:8080"];
   const origin = req.headers.origin;
-  if (origin && allowedOrigins.includes(origin)) {
+  if (origin && typeof origin === 'string' && allowedOrigins.includes(origin)) {
     res.header("Access-Control-Allow-Origin", origin);
   }
   res.header("Access-Control-Allow-Credentials", "true");
@@ -29,21 +29,22 @@ app.all("/api/auth/*", toNodeHandler(auth));
 app.use(express.json());
 
 // Proxy for other requests
-app.use(async (req, res) => {
+app.use(async (req: Request, res: Response) => {
   try {
     const proxyUrl = new URL(req.url || "/", VITE_URL).toString();
     const proxyReq = await fetch(proxyUrl, {
       method: req.method,
       headers: {
-        ...req.headers,
+        ...(req.headers as Record<string, string>),
         host: `localhost:${VITE_PORT}`,
       } as HeadersInit,
       body: ["GET", "HEAD"].includes(req.method || "") ? undefined : JSON.stringify(req.body),
     });
 
     res.status(proxyReq.status);
-    for (const [key, value] of proxyReq.headers.entries()) {
-      res.setHeader(key, value);
+    const headers = Object.fromEntries(proxyReq.headers);
+    for (const [key, value] of Object.entries(headers)) {
+      res.setHeader(key, value as string);
     }
     const proxyBody = await proxyReq.arrayBuffer();
     res.end(Buffer.from(proxyBody));

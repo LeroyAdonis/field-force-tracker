@@ -21,8 +21,11 @@ export function useSession() {
 
   useEffect(() => {
     const restoreSession = async () => {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 20_000);
       try {
-        const response = await fetch("/api/users/me");
+        const response = await fetch("/api/users/me", { signal: controller.signal });
+        clearTimeout(timer);
         if (response.ok) {
           const userData: SessionUser = await response.json();
           setUser({
@@ -36,9 +39,8 @@ export function useSession() {
             dailyKmTarget: userData.dailyKmTarget ?? undefined,
           });
         }
-      } catch (error) {
-        // Session not available, user stays null
-        console.debug("Session restoration failed:", error);
+      } catch {
+        clearTimeout(timer);
       } finally {
         setLoading(false);
       }

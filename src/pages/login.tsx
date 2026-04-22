@@ -88,9 +88,26 @@ export default function Login() {
           </Button>
         </form>
 
-        <p className="text-center text-xs text-foreground-muted mt-6">
-          Contact your administrator if you need access.
-        </p>
+        <div className="mt-6 surface-recessed rounded-xl p-4">
+          <p className="text-xs font-semibold text-foreground-muted mb-3 uppercase tracking-wider">Demo accounts</p>
+          <div className="space-y-1.5">
+            {[
+              { label: "Admin", email: "admin@kinetic.enterprise", password: "Admin1234!" },
+              { label: "Worker — Marcus", email: "marcus@kinetic.enterprise", password: "Worker1234!" },
+              { label: "Worker — Sarah", email: "sarah@kinetic.enterprise", password: "Worker1234!" },
+            ].map((demo) => (
+              <button
+                key={demo.email}
+                type="button"
+                onClick={() => { setEmail(demo.email); setPassword(demo.password); setError(""); }}
+                className="w-full text-left px-3 py-2 rounded-lg hover:bg-surface-high transition-colors"
+              >
+                <span className="text-xs font-bold block">{demo.label}</span>
+                <span className="text-[11px] text-foreground-muted">{demo.email}</span>
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   );

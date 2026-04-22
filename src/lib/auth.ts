@@ -7,9 +7,19 @@ if (!process.env.BETTER_AUTH_SECRET) {
   throw new Error("BETTER_AUTH_SECRET is not defined");
 }
 
-if (!process.env.BETTER_AUTH_URL) {
-  throw new Error("BETTER_AUTH_URL is not defined");
-}
+// Derive site URL: explicit config wins, fall back to Vercel's auto-injected
+// deployment URL, then localhost for local dev.
+const siteUrl =
+  process.env.BETTER_AUTH_URL ||
+  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:8080");
+
+const trustedOrigins = [
+  siteUrl,
+  ...(process.env.VERCEL_URL ? [`https://${process.env.VERCEL_URL}`] : []),
+  ...(process.env.BETTER_AUTH_TRUSTED_ORIGINS?.split(",").filter(Boolean) ?? []),
+  "http://localhost:8080",
+  "http://localhost:5173",
+];
 
 export const auth = betterAuth({
   database: drizzleAdapter(db, {
@@ -17,19 +27,15 @@ export const auth = betterAuth({
     schema,
   }),
   secret: process.env.BETTER_AUTH_SECRET,
-  baseURL: process.env.BETTER_AUTH_URL,
+  baseURL: siteUrl,
   basePath: "/api/auth",
-  trustedOrigins: process.env.BETTER_AUTH_TRUSTED_ORIGINS?.split(",") || [
-    "http://localhost:8080",
-    "http://localhost:5173",
-    "http://localhost:3000",
-  ],
+  trustedOrigins,
   plugins: [],
   socialProviders: {
     google: {
       clientId: process.env.GOOGLE_CLIENT_ID || "",
       clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
-      redirectURL: `${process.env.BETTER_AUTH_URL}/api/auth/callback/google`,
+      redirectURL: `${siteUrl}/api/auth/callback/google`,
     },
   },
 });

@@ -24,7 +24,19 @@ export default async function handler(req: Request): Promise<Response> {
 
     console.log(`${label} — reconstructed URL: ${authUrl.href} (+${Date.now() - t0}ms)`);
 
-    const response = await auth.handler(new Request(authUrl.href, req));
+    // Vercel's Request body stream doesn't survive new Request(url, req) correctly —
+    // read the raw body text first and re-attach it explicitly.
+    const bodyText = req.method !== "GET" && req.method !== "HEAD"
+      ? await req.text()
+      : null;
+
+    const authReq = new Request(authUrl.href, {
+      method: req.method,
+      headers: req.headers,
+      body: bodyText,
+    });
+
+    const response = await auth.handler(authReq);
 
     console.log(`${label} — auth.handler returned ${response.status} (+${Date.now() - t0}ms)`);
     return response;

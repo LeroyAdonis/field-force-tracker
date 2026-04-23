@@ -1,20 +1,25 @@
-import { neon } from "@neondatabase/serverless";
-import { drizzle } from "drizzle-orm/neon-http";
+import { Pool } from "pg";
+import { drizzle } from "drizzle-orm/node-postgres";
 import { config } from "dotenv";
 import * as schema from "./schema.js";
 import * as relations from "./relations.js";
 
 config({ path: ".env.local" });
 
-// neon-http uses Neon's HTTP API — requires the direct (unpooled) URL, not the pooler URL
-const connectionString = process.env.DATABASE_URL_UNPOOLED || process.env.DATABASE_URL;
-if (!connectionString) {
+if (!process.env.DATABASE_URL) {
   throw new Error("DATABASE_URL is not defined");
 }
 
-const sql = neon(connectionString);
+// Use pg with the pooler URL (PgBouncer manages connections for serverless).
+// connectionTimeoutMillis ensures we fail fast instead of hanging until Vercel's maxDuration.
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  max: 1,
+  connectionTimeoutMillis: 10_000,
+  idleTimeoutMillis: 10_000,
+});
 
-export const db = drizzle({ client: sql, schema: { ...schema, ...relations }, logger: process.env.NODE_ENV === "development" });
+export const db = drizzle({ client: pool, schema: { ...schema, ...relations }, logger: process.env.NODE_ENV === "development" });
 
 export * from "./schema.js";
 export * from "./relations.js";

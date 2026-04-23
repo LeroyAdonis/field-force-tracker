@@ -30,6 +30,21 @@ export const auth = betterAuth({
   baseURL: siteUrl,
   basePath: "/api/auth",
   trustedOrigins,
+  // Field mappings: our schema uses legacy NextAuth-style column names.
+  // These tell better-auth which DB column each of its internal field names maps to.
+  account: {
+    fields: {
+      accountId: "providerAccountId",
+      providerId: "provider",
+      accessTokenExpiresAt: "expiresAt",
+    },
+  },
+  verification: {
+    fields: {
+      value: "token",
+      expiresAt: "expires",
+    },
+  },
   emailAndPassword: {
     enabled: true,
   },

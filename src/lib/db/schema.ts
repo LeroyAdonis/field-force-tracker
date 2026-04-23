@@ -61,6 +61,9 @@ export const session = pgTable("session", {
 	token: text().notNull(),
 	expiresAt: timestamp({ mode: 'string' }).notNull(),
 	createdAt: timestamp({ mode: 'string' }).defaultNow(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow(),
+	ipAddress: text(),
+	userAgent: text(),
 }, (table) => [
 	index("session_token_idx").using("btree", table.token.asc().nullsLast().op("text_ops")),
 	index("session_userId_idx").using("btree", table.userId.asc().nullsLast().op("text_ops")),
@@ -113,6 +116,7 @@ export const verification = pgTable("verification", {
 	token: text().notNull(),
 	expires: timestamp({ mode: 'string' }).notNull(),
 	createdAt: timestamp({ mode: 'string' }).defaultNow(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow(),
 }, (table) => [
 	index("verification_identifier_idx").using("btree", table.identifier.asc().nullsLast().op("text_ops")),
 	unique("verification_token_unique").on(table.token),
@@ -139,9 +143,13 @@ export const account = pgTable("account", {
 	providerAccountId: text().notNull(),
 	accessToken: text(),
 	refreshToken: text(),
+	idToken: text(),
+	refreshTokenExpiresAt: timestamp({ mode: 'string' }),
+	scope: text(),
 	password: text(),
 	expiresAt: timestamp({ mode: 'string' }),
 	createdAt: timestamp({ mode: 'string' }).defaultNow(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow(),
 }, (table) => [
 	index("account_provider_idx").using("btree", table.provider.asc().nullsLast().op("text_ops"), table.providerAccountId.asc().nullsLast().op("text_ops")),
 	index("account_userId_idx").using("btree", table.userId.asc().nullsLast().op("text_ops")),

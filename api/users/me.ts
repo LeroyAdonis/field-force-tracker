@@ -1,21 +1,35 @@
-import { requireAuth } from "../../src/lib/api/middleware.js";
+import { fromNodeHeaders } from "better-auth/node";
 import { db, userRole, worker } from "../../src/lib/db/index.js";
+import { auth } from "../../src/lib/auth.js";
 import { eq } from "drizzle-orm";
+import type { IncomingMessage, ServerResponse } from "http";
 
-export default async function handler(req: Request): Promise<Response> {
+export default async function handler(
+  req: IncomingMessage,
+  res: ServerResponse
+): Promise<void> {
+  const send = (status: number, body: unknown) => {
+    const json = JSON.stringify(body);
+    res.statusCode = status;
+    res.setHeader("content-type", "application/json");
+    res.end(json);
+  };
+
   if (req.method !== "GET") {
-    return new Response(JSON.stringify({ error: "Method not allowed" }), {
-      status: 405,
-      headers: { "Content-Type": "application/json" },
-    });
+    return send(405, { error: "Method not allowed" });
   }
 
   try {
-    const user = await requireAuth(req);
+    const session = await auth.api.getSession({
+      headers: fromNodeHeaders(req.headers),
+    });
 
-    // Get complete user profile with worker data if applicable
+    if (!session?.user) {
+      return send(401, { error: "Unauthorized" });
+    }
+
     const userWithWorker = await db.query.userRole.findFirst({
-      where: eq(userRole.userId, user.userId),
+      where: eq(userRole.userId, session.user.id),
       with: {
         user: true,
         workers: true,
@@ -23,15 +37,11 @@ export default async function handler(req: Request): Promise<Response> {
     });
 
     if (!userWithWorker) {
-      return new Response(JSON.stringify({ error: "User profile not found" }), {
-        status: 404,
-        headers: { "Content-Type": "application/json" },
-      });
+      return send(404, { error: "User profile not found" });
     }
 
     const workerRecord = userWithWorker.workers?.[0];
 
-    // Build response with user + role + worker data
     const response = {
       id: userWithWorker.user?.id ?? null,
       email: userWithWorker.user?.email ?? null,
@@ -48,23 +58,14 @@ export default async function handler(req: Request): Promise<Response> {
       }),
     };
 
-    return new Response(JSON.stringify(response), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    });
+    return send(200, response);
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Unknown error";
 
-    if (message === "Unauthorized") {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { "Content-Type": "application/json" },
-      });
+    if (message === "Unauthorized" || message === "User role not found") {
+      return send(401, { error: "Unauthorized" });
     }
 
-    return new Response(JSON.stringify({ error: message }), {
-      status: 500,
-      headers: { "Content-Type": "application/json" },
-    });
+    return send(500, { error: message });
   }
 }

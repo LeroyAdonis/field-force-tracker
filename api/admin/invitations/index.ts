@@ -1,23 +1,26 @@
-import { requireRole, badRequest, serverError } from "../../../src/lib/api/middleware.js";
+import { requireRoleNode, readJsonBody, sendJson } from "../../../src/lib/api/middleware.js";
 import { db, invitation } from "../../../src/lib/db/index.js";
 import { randomUUID } from "crypto";
 import { desc } from "drizzle-orm";
+import type { IncomingMessage, ServerResponse } from "http";
 
-export default async function handler(req: Request): Promise<Response> {
+export default async function handler(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  const send = (status: number, body: unknown) => sendJson(res, status, body);
+
   try {
     if (req.method === "GET") {
-      await requireRole(req, ["admin"]);
+      await requireRoleNode(req, ["admin"]);
       const invitations = await db.select().from(invitation).orderBy(desc(invitation.createdAt));
-      return new Response(JSON.stringify(invitations), { status: 200, headers: { "Content-Type": "application/json" } });
+      return send(200, invitations);
     }
 
     if (req.method === "POST") {
-      const admin = await requireRole(req, ["admin"]);
-      const body = await req.json();
-      const { email, role } = body;
+      const admin = await requireRoleNode(req, ["admin"]);
+      const body = await readJsonBody(req);
+      const { email, role } = body as { email?: string; role?: string };
 
-      if (!email || !role) return badRequest("email and role are required");
-      if (!["admin", "worker"].includes(role)) return badRequest("role must be 'admin' or 'worker'");
+      if (!email || !role) return send(400, { error: "email and role are required" });
+      if (!["admin", "worker"].includes(role)) return send(400, { error: "role must be 'admin' or 'worker'" });
 
       const token = randomUUID();
       const nowIso = new Date().toISOString();
@@ -34,22 +37,14 @@ export default async function handler(req: Request): Promise<Response> {
         createdAt: nowIso,
       });
 
-      return new Response(
-        JSON.stringify({ id, email, role, token, expiresAt }),
-        { status: 201, headers: { "Content-Type": "application/json" } }
-      );
+      return send(201, { id, email, role, token, expiresAt });
     }
 
-    return new Response(JSON.stringify({ error: "Method not allowed" }), {
-      status: 405,
-      headers: { "Content-Type": "application/json" },
-    });
-  } catch (error) {
+    return send(405, { error: "Method not allowed" });
+  } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Unknown error";
-    if (message === "Unauthorized")
-      return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { "Content-Type": "application/json" } });
-    if (message === "Forbidden")
-      return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers: { "Content-Type": "application/json" } });
-    return serverError(message);
+    if (message === "Unauthorized") return send(401, { error: "Unauthorized" });
+    if (message === "Forbidden") return send(403, { error: "Forbidden" });
+    return send(500, { error: message });
   }
 }

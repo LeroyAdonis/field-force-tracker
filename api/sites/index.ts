@@ -1,15 +1,18 @@
-import { requireAuth, requireRole, forbidden, badRequest, serverError } from "../../src/lib/api/middleware.js";
+import { requireAuthNode, requireRoleNode, readJsonBody, sendJson } from "../../src/lib/api/middleware.js";
 import { db, site } from "../../src/lib/db/index.js";
 import { randomUUID } from "crypto";
+import type { IncomingMessage, ServerResponse } from "http";
 
-export default async function handler(req: Request) {
+export default async function handler(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  const send = (status: number, body: unknown) => sendJson(res, status, body);
+
   try {
     if (req.method === "GET") {
-      await requireAuth(req);
+      await requireAuthNode(req);
 
       const sites = await db.query.site.findMany();
 
-      const response = sites.map((s) => ({
+      return send(200, sites.map((s) => ({
         id: s.id,
         name: s.name,
         address: s.address,
@@ -17,60 +20,32 @@ export default async function handler(req: Request) {
         active: s.active,
         createdAt: s.createdAt,
         updatedAt: s.updatedAt,
-      }));
+      })));
+    }
 
-      return new Response(JSON.stringify(response), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
-    } else if (req.method === "POST") {
-      // Only admin can create sites
-      await requireRole(req, ["admin"]);
+    if (req.method === "POST") {
+      await requireRoleNode(req, ["admin"]);
 
-      const body = await req.json();
-      const { name, address, zone } = body;
+      const body = await readJsonBody(req);
+      const { name, address, zone } = body as { name?: string; address?: string; zone?: string };
 
       if (!name || !address || !zone) {
-        return badRequest("name, address, and zone are required");
+        return send(400, { error: "name, address, and zone are required" });
       }
 
       const nowIso = new Date().toISOString();
-      const newSite = {
-        id: randomUUID(),
-        name,
-        address,
-        zone,
-        active: true,
-        createdAt: nowIso,
-        updatedAt: nowIso,
-      };
+      const newSite = { id: randomUUID(), name, address, zone, active: true, createdAt: nowIso, updatedAt: nowIso };
 
       await db.insert(site).values(newSite);
 
-      return new Response(JSON.stringify(newSite), {
-        status: 201,
-        headers: { "Content-Type": "application/json" },
-      });
+      return send(201, newSite);
     }
 
-    return new Response(JSON.stringify({ error: "Method not allowed" }), {
-      status: 405,
-      headers: { "Content-Type": "application/json" },
-    });
+    return send(405, { error: "Method not allowed" });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Unknown error";
-
-    if (message === "Unauthorized") {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { "Content-Type": "application/json" },
-      });
-    }
-
-    if (message === "Forbidden") {
-      return forbidden();
-    }
-
-    return serverError(message);
+    if (message === "Unauthorized") return send(401, { error: "Unauthorized" });
+    if (message === "Forbidden") return send(403, { error: "Forbidden" });
+    return send(500, { error: message });
   }
 }

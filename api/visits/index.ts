@@ -1,72 +1,44 @@
-import { requireAuth, badRequest, serverError, forbidden } from "../../src/lib/api/middleware.js";
+import { requireAuthNode, readJsonBody, sendJson } from "../../src/lib/api/middleware.js";
 import { db, visit, inspection, photo, worker, site } from "../../src/lib/db/index.js";
 import { eq } from "drizzle-orm";
 import { randomUUID } from "crypto";
+import type { IncomingMessage, ServerResponse } from "http";
 
-export default async function handler(req: Request) {
+export default async function handler(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  const send = (status: number, body: unknown) => sendJson(res, status, body);
+
   try {
     if (req.method === "GET") {
-      const user = await requireAuth(req);
+      const user = await requireAuthNode(req);
 
       let visits;
       if (user.role === "admin") {
-        // Admin can see all visits
         visits = await db.query.visit.findMany({
           with: {
-            worker: {
-              with: {
-                userRole: {
-                  with: {
-                    user: true,
-                  },
-                },
-              },
-            },
+            worker: { with: { userRole: { with: { user: true } } } },
             site: true,
-            inspections: {
-              with: {
-                photos: true,
-              },
-            },
+            inspections: { with: { photos: true } },
           },
         });
       } else {
-        // Worker can only see their own visits
         const workerRecord = await db.query.worker.findFirst({
           where: eq(worker.userRoleId, user.userRoleId),
         });
 
-        if (!workerRecord) {
-          return new Response(JSON.stringify({ error: "Worker record not found" }), {
-            status: 404,
-            headers: { "Content-Type": "application/json" },
-          });
-        }
+        if (!workerRecord) return send(404, { error: "Worker record not found" });
 
         visits = await db.query.visit.findMany({
           where: eq(visit.workerId, workerRecord.id),
           with: {
-            worker: {
-              with: {
-                userRole: {
-                  with: {
-                    user: true,
-                  },
-                },
-              },
-            },
+            worker: { with: { userRole: { with: { user: true } } } },
             site: true,
-            inspections: {
-              with: {
-                photos: true,
-              },
-            },
+            inspections: { with: { photos: true } },
           },
         });
       }
 
-      const response = visits.map((v) => {
-        const inspectionRecord = v.inspections?.[0];
+      return send(200, visits.map((v) => {
+        const ir = v.inspections?.[0];
         return {
           id: v.id,
           workerId: v.workerId,
@@ -76,55 +48,46 @@ export default async function handler(req: Request) {
           date: v.date,
           timestamp: v.timestamp,
           km: v.km,
-          inspection: inspectionRecord
+          inspection: ir
             ? {
-                id: inspectionRecord.id,
-                type: inspectionRecord.type,
-                notes: inspectionRecord.notes,
-                timestamp: inspectionRecord.timestamp,
-                photos: inspectionRecord.photos.map((p) => ({
-                  id: p.id,
-                  dataUrl: p.dataUrl,
-                  caption: p.caption,
-                })),
+                id: ir.id,
+                type: ir.type,
+                notes: ir.notes,
+                timestamp: ir.timestamp,
+                photos: ir.photos.map((p) => ({ id: p.id, dataUrl: p.dataUrl, caption: p.caption })),
               }
             : null,
           createdAt: v.createdAt,
           updatedAt: v.updatedAt,
         };
-      });
+      }));
+    }
 
-      return new Response(JSON.stringify(response), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
-    } else if (req.method === "POST") {
-      const user = await requireAuth(req);
+    if (req.method === "POST") {
+      const user = await requireAuthNode(req);
 
-      const body = await req.json();
-      const { workerId, siteId, date, km, inspectionType, notes, photos } = body;
+      const body = await readJsonBody(req);
+      const { workerId, siteId, date, km, inspectionType, notes, photos: photoList } = body as {
+        workerId?: string;
+        siteId?: string;
+        date?: string;
+        km?: string | number;
+        inspectionType?: string;
+        notes?: string;
+        photos?: { dataUrl: string; caption?: string }[];
+      };
 
       if (!workerId || !siteId || !date || !km) {
-        return badRequest("workerId, siteId, date, and km are required");
+        return send(400, { error: "workerId, siteId, date, and km are required" });
       }
 
-      // Check if user is creating for themselves or is admin
-      const workerRecord = await db.query.worker.findFirst({
-        where: eq(worker.id, workerId),
-      });
-
-      if (!workerRecord) {
-        return new Response(JSON.stringify({ error: "Worker not found" }), {
-          status: 404,
-          headers: { "Content-Type": "application/json" },
-        });
-      }
+      const workerRecord = await db.query.worker.findFirst({ where: eq(worker.id, workerId) });
+      if (!workerRecord) return send(404, { error: "Worker not found" });
 
       if (user.role !== "admin" && workerRecord.userRoleId !== user.userRoleId) {
-        return forbidden();
+        return send(403, { error: "Forbidden" });
       }
 
-      // Create visit
       const visitId = randomUUID();
       const nowIso = new Date().toISOString();
 
@@ -134,12 +97,11 @@ export default async function handler(req: Request) {
         siteId,
         date,
         timestamp: nowIso,
-        km,
+        km: String(km),
         createdAt: nowIso,
         updatedAt: nowIso,
       });
 
-      // Create inspection if provided
       let inspectionData: {
         id: string;
         type: string;
@@ -147,6 +109,7 @@ export default async function handler(req: Request) {
         timestamp: string;
         photos: { id: string; dataUrl: string; caption: string | null }[];
       } | null = null;
+
       if (inspectionType) {
         const inspectionId = randomUUID();
         const photosData: { id: string; dataUrl: string; caption: string | null }[] = [];
@@ -161,8 +124,8 @@ export default async function handler(req: Request) {
           updatedAt: nowIso,
         });
 
-        if (photos && Array.isArray(photos)) {
-          for (const p of photos) {
+        if (photoList && Array.isArray(photoList)) {
+          for (const p of photoList) {
             const photoId = randomUUID();
             await db.insert(photo).values({
               id: photoId,
@@ -171,29 +134,16 @@ export default async function handler(req: Request) {
               caption: p.caption || null,
               createdAt: nowIso,
             });
-            photosData.push({
-              id: photoId,
-              dataUrl: p.dataUrl,
-              caption: p.caption || null,
-            });
+            photosData.push({ id: photoId, dataUrl: p.dataUrl, caption: p.caption || null });
           }
         }
 
-        inspectionData = {
-          id: inspectionId,
-          type: inspectionType,
-          notes: notes || null,
-          timestamp: nowIso,
-          photos: photosData,
-        };
+        inspectionData = { id: inspectionId, type: inspectionType, notes: notes || null, timestamp: nowIso, photos: photosData };
       }
 
-      // Fetch site for response
-      const siteRecord = await db.query.site.findFirst({
-        where: eq(site.id, siteId),
-      });
+      const siteRecord = await db.query.site.findFirst({ where: eq(site.id, siteId) });
 
-      const response = {
+      return send(201, {
         id: visitId,
         workerId,
         siteId,
@@ -204,32 +154,14 @@ export default async function handler(req: Request) {
         inspection: inspectionData,
         createdAt: nowIso,
         updatedAt: nowIso,
-      };
-
-      return new Response(JSON.stringify(response), {
-        status: 201,
-        headers: { "Content-Type": "application/json" },
       });
     }
 
-    return new Response(JSON.stringify({ error: "Method not allowed" }), {
-      status: 405,
-      headers: { "Content-Type": "application/json" },
-    });
+    return send(405, { error: "Method not allowed" });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Unknown error";
-
-    if (message === "Unauthorized") {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { "Content-Type": "application/json" },
-      });
-    }
-
-    if (message === "Forbidden") {
-      return forbidden();
-    }
-
-    return serverError(message);
+    if (message === "Unauthorized") return send(401, { error: "Unauthorized" });
+    if (message === "Forbidden") return send(403, { error: "Forbidden" });
+    return send(500, { error: message });
   }
 }

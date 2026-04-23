@@ -1,16 +1,18 @@
-import { requireAuth, badRequest, serverError, forbidden } from "../../src/lib/api/middleware.js";
-import { db, visit, worker, inspection, photo, site } from "../../src/lib/db/index.js";
+import { requireAuthNode, readJsonBody, sendJson } from "../../src/lib/api/middleware.js";
+import { db, visit, worker, inspection } from "../../src/lib/db/index.js";
 import { eq } from "drizzle-orm";
-import { randomUUID } from "crypto";
+import type { IncomingMessage, ServerResponse } from "http";
 
-export default async function handler(req: Request): Promise<Response> {
-  const url = new URL(req.url);
+export default async function handler(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  const send = (status: number, body: unknown) => sendJson(res, status, body);
+
+  const url = new URL(req.url!, "http://localhost");
   const id = url.pathname.split("/").pop();
 
-  if (!id) return badRequest("Visit ID is required");
+  if (!id) return send(400, { error: "Visit ID is required" });
 
   try {
-    const user = await requireAuth(req);
+    const user = await requireAuthNode(req);
 
     if (req.method === "GET") {
       const v = await db.query.visit.findFirst({
@@ -22,11 +24,11 @@ export default async function handler(req: Request): Promise<Response> {
         },
       });
 
-      if (!v) return new Response(JSON.stringify({ error: "Visit not found" }), { status: 404, headers: { "Content-Type": "application/json" } });
-      if (user.role !== "admin" && v.worker?.userRoleId !== user.userRoleId) return forbidden();
+      if (!v) return send(404, { error: "Visit not found" });
+      if (user.role !== "admin" && v.worker?.userRoleId !== user.userRoleId) return send(403, { error: "Forbidden" });
 
       const ir = v.inspections?.[0];
-      return new Response(JSON.stringify({
+      return send(200, {
         id: v.id,
         workerId: v.workerId,
         workerName: v.worker?.userRole?.displayName || "Unknown",
@@ -35,10 +37,18 @@ export default async function handler(req: Request): Promise<Response> {
         date: v.date,
         timestamp: v.timestamp,
         km: v.km,
-        inspection: ir ? { id: ir.id, type: ir.type, notes: ir.notes, timestamp: ir.timestamp, photos: ir.photos.map((p) => ({ id: p.id, dataUrl: p.dataUrl, caption: p.caption })) } : null,
+        inspection: ir
+          ? {
+              id: ir.id,
+              type: ir.type,
+              notes: ir.notes,
+              timestamp: ir.timestamp,
+              photos: ir.photos.map((p) => ({ id: p.id, dataUrl: p.dataUrl, caption: p.caption })),
+            }
+          : null,
         createdAt: v.createdAt,
         updatedAt: v.updatedAt,
-      }), { status: 200, headers: { "Content-Type": "application/json" } });
+      });
     }
 
     if (req.method === "PATCH") {
@@ -47,11 +57,11 @@ export default async function handler(req: Request): Promise<Response> {
         with: { worker: true, inspections: true },
       });
 
-      if (!v) return new Response(JSON.stringify({ error: "Visit not found" }), { status: 404, headers: { "Content-Type": "application/json" } });
-      if (user.role !== "admin" && v.worker?.userRoleId !== user.userRoleId) return forbidden();
+      if (!v) return send(404, { error: "Visit not found" });
+      if (user.role !== "admin" && v.worker?.userRoleId !== user.userRoleId) return send(403, { error: "Forbidden" });
 
-      const body = await req.json();
-      const { km, notes, inspectionType } = body;
+      const body = await readJsonBody(req);
+      const { km, notes, inspectionType } = body as { km?: string | number; notes?: string; inspectionType?: string };
       const nowIso = new Date().toISOString();
 
       if (km !== undefined) {
@@ -68,7 +78,7 @@ export default async function handler(req: Request): Promise<Response> {
         }
       }
 
-      return new Response(JSON.stringify({ success: true }), { status: 200, headers: { "Content-Type": "application/json" } });
+      return send(200, { success: true });
     }
 
     if (req.method === "DELETE") {
@@ -77,18 +87,18 @@ export default async function handler(req: Request): Promise<Response> {
         with: { worker: true },
       });
 
-      if (!v) return new Response(JSON.stringify({ error: "Visit not found" }), { status: 404, headers: { "Content-Type": "application/json" } });
-      if (user.role !== "admin" && v.worker?.userRoleId !== user.userRoleId) return forbidden();
+      if (!v) return send(404, { error: "Visit not found" });
+      if (user.role !== "admin" && v.worker?.userRoleId !== user.userRoleId) return send(403, { error: "Forbidden" });
 
       await db.delete(visit).where(eq(visit.id, id));
-      return new Response(JSON.stringify({ success: true }), { status: 200, headers: { "Content-Type": "application/json" } });
+      return send(200, { success: true });
     }
 
-    return new Response(JSON.stringify({ error: "Method not allowed" }), { status: 405, headers: { "Content-Type": "application/json" } });
-  } catch (error) {
+    return send(405, { error: "Method not allowed" });
+  } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Unknown error";
-    if (message === "Unauthorized") return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { "Content-Type": "application/json" } });
-    if (message === "Forbidden") return forbidden();
-    return serverError(message);
+    if (message === "Unauthorized") return send(401, { error: "Unauthorized" });
+    if (message === "Forbidden") return send(403, { error: "Forbidden" });
+    return send(500, { error: message });
   }
 }

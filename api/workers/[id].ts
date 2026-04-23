@@ -1,6 +1,7 @@
-import { requireAuth, requireRole, forbidden, badRequest, serverError } from "../../src/lib/api/middleware.js";
+import { requireAuthNode, requireRoleNode, readJsonBody, sendJson } from "../../src/lib/api/middleware.js";
 import { db, worker, userRole } from "../../src/lib/db/index.js";
 import { eq } from "drizzle-orm";
+import type { IncomingMessage, ServerResponse } from "http";
 
 type WorkerResponse = {
   id: string;
@@ -16,43 +17,26 @@ type WorkerResponse = {
   updatedAt: string | null;
 };
 
-export default async function handler(req: Request): Promise<Response> {
-  const url = new URL(req.url);
+export default async function handler(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  const send = (status: number, body: unknown) => sendJson(res, status, body);
+
+  const url = new URL(req.url!, "http://localhost");
   const id = url.pathname.split("/").pop();
 
-  if (!id) {
-    return badRequest("Worker ID is required");
-  }
+  if (!id) return send(400, { error: "Worker ID is required" });
 
   try {
     if (req.method === "GET") {
-      const user = await requireAuth(req);
+      const user = await requireAuthNode(req);
 
       const w = await db.query.worker.findFirst({
         where: eq(worker.id, id),
-        with: {
-          userRole: {
-            with: {
-              user: true,
-            },
-          },
-        },
+        with: { userRole: { with: { user: true } } },
       });
 
-      if (!w) {
-        return new Response(
-          JSON.stringify({ error: "Worker not found" }),
-          {
-            status: 404,
-            headers: { "Content-Type": "application/json" },
-          }
-        );
-      }
+      if (!w) return send(404, { error: "Worker not found" });
 
-      // Workers can only see themselves, admins can see all
-      if (user.role !== "admin" && w.id !== user.userRoleId) {
-        return forbidden();
-      }
+      if (user.role !== "admin" && w.id !== user.userRoleId) return send(403, { error: "Forbidden" });
 
       const response: WorkerResponse = {
         id: w.id,
@@ -68,55 +52,33 @@ export default async function handler(req: Request): Promise<Response> {
         updatedAt: w.updatedAt,
       };
 
-      return new Response(JSON.stringify(response), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
-    } else if (req.method === "PATCH") {
-      const user = await requireAuth(req);
+      return send(200, response);
+    }
+
+    if (req.method === "PATCH") {
+      const user = await requireAuthNode(req);
 
       const w = await db.query.worker.findFirst({
         where: eq(worker.id, id),
-        with: {
-          userRole: true,
-        },
+        with: { userRole: true },
       });
 
-      if (!w) {
-        return new Response(
-          JSON.stringify({ error: "Worker not found" }),
-          {
-            status: 404,
-            headers: { "Content-Type": "application/json" },
-          }
-        );
-      }
+      if (!w) return send(404, { error: "Worker not found" });
+      if (user.role !== "admin" && w.id !== user.userRoleId) return send(403, { error: "Forbidden" });
 
-      // Workers can only update themselves, admins can update anyone
-      if (user.role !== "admin" && w.id !== user.userRoleId) {
-        return forbidden();
-      }
-
-      const body = await req.json();
-      const { displayName, jobTitle, dailyKmTarget, active, avatar } = body;
+      const body = await readJsonBody(req);
+      const { displayName, jobTitle, dailyKmTarget, active, avatar } = body as Record<string, unknown>;
 
       const updates: Record<string, unknown> = {};
       if (jobTitle !== undefined) updates.jobTitle = jobTitle;
       if (dailyKmTarget !== undefined) updates.dailyKmTarget = dailyKmTarget;
       if (active !== undefined) updates.active = active;
+
       if (displayName !== undefined && w.userRole) {
-        // Update userRole displayName separately
-        await db
-          .update(userRole)
-          .set({ displayName })
-          .where(eq(userRole.id, w.userRole.id));
+        await db.update(userRole).set({ displayName: displayName as string }).where(eq(userRole.id, w.userRole.id));
       }
       if (avatar !== undefined && w.userRole) {
-        // Update userRole avatar separately
-        await db
-          .update(userRole)
-          .set({ avatar })
-          .where(eq(userRole.id, w.userRole.id));
+        await db.update(userRole).set({ avatar: avatar as string }).where(eq(userRole.id, w.userRole.id));
       }
 
       if (Object.keys(updates).length > 0) {
@@ -124,16 +86,9 @@ export default async function handler(req: Request): Promise<Response> {
         await db.update(worker).set(updates).where(eq(worker.id, id));
       }
 
-      // Fetch updated worker
       const updated = await db.query.worker.findFirst({
         where: eq(worker.id, id),
-        with: {
-          userRole: {
-            with: {
-              user: true,
-            },
-          },
-        },
+        with: { userRole: { with: { user: true } } },
       });
 
       const response: WorkerResponse = {
@@ -150,54 +105,24 @@ export default async function handler(req: Request): Promise<Response> {
         updatedAt: updated?.updatedAt ?? null,
       };
 
-      return new Response(JSON.stringify(response), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
-    } else if (req.method === "DELETE") {
-      // Only admin can delete workers
-      await requireRole(req, ["admin"]);
+      return send(200, response);
+    }
 
-      const w = await db.query.worker.findFirst({
-        where: eq(worker.id, id),
-      });
+    if (req.method === "DELETE") {
+      await requireRoleNode(req, ["admin"]);
 
-      if (!w) {
-        return new Response(
-          JSON.stringify({ error: "Worker not found" }),
-          {
-            status: 404,
-            headers: { "Content-Type": "application/json" },
-          }
-        );
-      }
+      const w = await db.query.worker.findFirst({ where: eq(worker.id, id) });
+      if (!w) return send(404, { error: "Worker not found" });
 
       await db.delete(worker).where(eq(worker.id, id));
-
-      return new Response(JSON.stringify({ success: true }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
+      return send(200, { success: true });
     }
 
-    return new Response(JSON.stringify({ error: "Method not allowed" }), {
-      status: 405,
-      headers: { "Content-Type": "application/json" },
-    });
+    return send(405, { error: "Method not allowed" });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Unknown error";
-
-    if (message === "Unauthorized") {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { "Content-Type": "application/json" },
-      });
-    }
-
-    if (message === "Forbidden") {
-      return forbidden();
-    }
-
-    return serverError(message);
+    if (message === "Unauthorized") return send(401, { error: "Unauthorized" });
+    if (message === "Forbidden") return send(403, { error: "Forbidden" });
+    return send(500, { error: message });
   }
 }

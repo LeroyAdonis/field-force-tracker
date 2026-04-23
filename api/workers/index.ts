@@ -1,41 +1,29 @@
-import { requireAuth, requireRole, forbidden, badRequest, serverError } from "../../src/lib/api/middleware.js";
+import { requireAuthNode, requireRoleNode, sendJson } from "../../src/lib/api/middleware.js";
 import { db, worker, userRole } from "../../src/lib/db/index.js";
 import { eq } from "drizzle-orm";
-import { randomUUID } from "crypto";
+import type { IncomingMessage, ServerResponse } from "http";
 
-export default async function handler(req: Request) {
+export default async function handler(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  const send = (status: number, body: unknown) => sendJson(res, status, body);
+
   try {
     if (req.method === "GET") {
-      const user = await requireAuth(req);
+      const user = await requireAuthNode(req);
 
-      // Admin can list all workers, workers can only see their own
       let workers;
       if (user.role === "admin") {
         workers = await db.query.worker.findMany({
-          with: {
-            userRole: {
-              with: {
-                user: true,
-              },
-            },
-          },
+          with: { userRole: { with: { user: true } } },
         });
       } else {
-        // Worker can only see themselves
         const selfWorker = await db.query.worker.findFirst({
           where: eq(worker.userRoleId, user.userRoleId),
-          with: {
-            userRole: {
-              with: {
-                user: true,
-              },
-            },
-          },
+          with: { userRole: { with: { user: true } } },
         });
         workers = selfWorker ? [selfWorker] : [];
       }
 
-      const response = workers.map((w) => ({
+      return send(200, workers.map((w) => ({
         id: w.id,
         userId: w.userRole?.userId,
         email: w.userRole?.user?.email,
@@ -47,58 +35,19 @@ export default async function handler(req: Request) {
         isDemo: w.isDemo,
         createdAt: w.createdAt,
         updatedAt: w.updatedAt,
-      }));
-
-      return new Response(JSON.stringify(response), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
-    } else if (req.method === "POST") {
-      // Only admin can create workers
-      await requireRole(req, ["admin"]);
-
-      const body = await req.json();
-      const { email, displayName, jobTitle, dailyKmTarget, isDemo } = body;
-
-      if (!email || !displayName) {
-        return badRequest("email and displayName are required");
-      }
-
-      // Check if user already exists
-      const existingUser = await db.query.user.findFirst({
-        where: eq(userRole.userId, email),
-      });
-
-      if (existingUser) {
-        return badRequest("User already exists");
-      }
-
-      // Create new worker (requires manual user/userRole creation first via invitation flow)
-      // For now, just validate structure
-      return new Response(JSON.stringify({ error: "Use invitation flow to create workers" }), {
-        status: 400,
-        headers: { "Content-Type": "application/json" },
-      });
+      })));
     }
 
-    return new Response(JSON.stringify({ error: "Method not allowed" }), {
-      status: 405,
-      headers: { "Content-Type": "application/json" },
-    });
+    if (req.method === "POST") {
+      await requireRoleNode(req, ["admin"]);
+      return send(400, { error: "Use invitation flow to create workers" });
+    }
+
+    return send(405, { error: "Method not allowed" });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Unknown error";
-
-    if (message === "Unauthorized") {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { "Content-Type": "application/json" },
-      });
-    }
-
-    if (message === "Forbidden") {
-      return forbidden();
-    }
-
-    return serverError(message);
+    if (message === "Unauthorized") return send(401, { error: "Unauthorized" });
+    if (message === "Forbidden") return send(403, { error: "Forbidden" });
+    return send(500, { error: message });
   }
 }

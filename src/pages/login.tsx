@@ -1,40 +1,50 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2, MapPin } from "lucide-react";
-import { useApp } from "@/lib/store";
-import { admin, workers } from "@/lib/mock-data";
+
+const DEMO_ACCOUNTS = [
+  { label: "Admin", email: "admin@kinetic.enterprise", password: "Admin1234!" },
+  { label: "Worker — Marcus", email: "marcus@kinetic.enterprise", password: "Worker1234!" },
+  { label: "Worker — Sarah", email: "sarah@kinetic.enterprise", password: "Worker1234!" },
+];
 
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const loginAs = useApp((state) => state.loginAs);
+
+  // Pre-warm: ping the session endpoint on mount so Neon wakes up before the user submits
+  useEffect(() => {
+    fetch("/api/auth/get-session").catch(() => {});
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setLoading(true);
 
-    // Simulate network delay
-    await new Promise((resolve) => setTimeout(resolve, 500));
+    try {
+      const res = await fetch("/api/auth/sign-in/email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password, rememberMe: true }),
+      });
 
-    if (email === admin.email) {
-      loginAs("admin");
-    } else {
-      const worker = workers.find((w) => w.email === email);
-      if (worker) {
-        loginAs("worker", worker.id);
-      } else {
-        setError("Invalid email or password.");
-        setLoading(false);
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setError(data?.message || data?.error || "Invalid email or password.");
         return;
       }
-    }
 
-    window.location.href = "/";
+      window.location.href = "/";
+    } catch {
+      setError("Network error — please try again.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -92,11 +102,7 @@ export default function Login() {
         <div className="mt-6 surface-recessed rounded-xl p-4">
           <p className="text-xs font-semibold text-foreground-muted mb-3 uppercase tracking-wider">Demo accounts</p>
           <div className="space-y-1.5">
-            {[
-              { label: "Admin", email: "admin@kinetic.enterprise", password: "Admin1234!" },
-              { label: "Worker — Marcus", email: "marcus@kinetic.enterprise", password: "Worker1234!" },
-              { label: "Worker — Sarah", email: "sarah@kinetic.enterprise", password: "Worker1234!" },
-            ].map((demo) => (
+            {DEMO_ACCOUNTS.map((demo) => (
               <button
                 key={demo.email}
                 type="button"

@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { useSession } from "@/hooks/useSession";
 import { PageSkeleton } from "@/components/PageSkeleton";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -19,11 +19,13 @@ import AtRisk from "./pages/admin/AtRisk";
 import SiteManagement from "./pages/admin/SiteManagement";
 import Reports from "./pages/admin/Reports";
 import Settings from "./pages/admin/Settings";
+import { useApp } from "./lib/store";
 
 const queryClient = new QueryClient();
 
 function AppRoutes() {
   const { loading } = useSession();
+  const user = useApp(s => s.user);
 
   if (loading) {
     return <PageSkeleton />;
@@ -32,7 +34,14 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/" element={<Index />} />
-      <Route path="/login" element={<Login />} />
+      <Route
+        path="/login"
+        element={
+          user
+            ? <Navigate to={user.role === "admin" ? "/admin" : "/worker"} replace />
+            : <Login />
+        }
+      />
 
       <Route path="/worker" element={<Protected role="worker"><WorkerDashboard /></Protected>} />
       <Route path="/worker/log" element={<Protected role="worker"><LogVisit /></Protected>} />

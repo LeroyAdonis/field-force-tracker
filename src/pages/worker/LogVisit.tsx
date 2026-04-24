@@ -104,7 +104,7 @@ export default function LogVisit() {
   }, []);
 
   const filtered = useMemo(() =>
-    sites.filter(s => s.active && (s.name.toLowerCase().includes(query.toLowerCase()) || s.address.toLowerCase().includes(query.toLowerCase()))),
+    sites.filter(s => s.active && ((s.name ?? "").toLowerCase().includes(query.toLowerCase()) || (s.address ?? "").toLowerCase().includes(query.toLowerCase()))),
     [sites, query]);
 
   if (!user || user.role !== "worker") return null;

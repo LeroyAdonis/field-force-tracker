@@ -158,7 +158,7 @@ export default function Reports() {
           </div>
         </div>
         <div className="h-72">
-          <ResponsiveContainer>
+          <ResponsiveContainer width="100%" height="100%">
             <AreaChart
               data={series}
               margin={{ top: 8, right: 8, left: -12, bottom: 0 }}
@@ -218,7 +218,7 @@ export default function Reports() {
           <div className="label-eyebrow mb-1">By Worker</div>
           <h2 className="text-lg font-bold">Visits & Distance per Operative</h2>
           <div className="h-64 mt-4">
-            <ResponsiveContainer>
+            <ResponsiveContainer width="100%" height="100%">
               <BarChart data={byWorker} margin={{ top: 8, right: 8, left: -12, bottom: 0 }} onClick={() => navigate("/admin/workforce")} style={{ cursor: "pointer" }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--surface-high))" vertical={false} />
                 <XAxis dataKey="name" tick={{ fontSize: 11, fill: "hsl(var(--foreground-muted))" }} axisLine={false} tickLine={false} />
@@ -240,7 +240,7 @@ export default function Reports() {
           ) : (
             <>
               <div className="h-64 mt-4">
-                <ResponsiveContainer>
+                <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie data={bySite} dataKey="value" nameKey="name" innerRadius={48} outerRadius={84} paddingAngle={3} onClick={() => navigate("/admin/sites")} style={{ cursor: "pointer" }}>
                       {bySite.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}

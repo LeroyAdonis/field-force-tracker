@@ -46,8 +46,9 @@ export default function Workforce() {
 
   const [isPending, startTransition] = useTransition();
 
+  const q = query.toLowerCase();
   const filtered = workers.filter(w =>
-    w.displayName.toLowerCase().includes(query.toLowerCase()) || w.jobTitle.toLowerCase().includes(query.toLowerCase())
+    (w.displayName ?? "").toLowerCase().includes(q) || (w.jobTitle ?? "").toLowerCase().includes(q)
   );
 
   // Normalize km to number for KPI computation

@@ -61,9 +61,9 @@ export default function SiteManagement() {
     return sites.filter(s => {
       const matchesSearch =
         !q ||
-        s.name.toLowerCase().includes(q) ||
-        s.address.toLowerCase().includes(q) ||
-        s.zone.toLowerCase().includes(q);
+        (s.name ?? "").toLowerCase().includes(q) ||
+        (s.address ?? "").toLowerCase().includes(q) ||
+        (s.zone ?? "").toLowerCase().includes(q);
       const matchesZone = zoneFilter === "all" || s.zone === zoneFilter;
       return matchesSearch && matchesZone;
     });

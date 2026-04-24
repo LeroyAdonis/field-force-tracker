@@ -1,25 +1,14 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2, MapPin } from "lucide-react";
-
-const DEMO_ACCOUNTS = [
-  { label: "Admin", email: "admin@kinetic.enterprise", password: "Admin1234!" },
-  { label: "Worker — Marcus", email: "marcus@kinetic.enterprise", password: "Worker1234!" },
-  { label: "Worker — Sarah", email: "sarah@kinetic.enterprise", password: "Worker1234!" },
-];
 
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-
-  // Pre-warm: ping the session endpoint on mount so Neon wakes up before the user submits
-  useEffect(() => {
-    fetch("/api/auth/get-session").catch(() => {});
-  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -102,7 +91,11 @@ export default function Login() {
         <div className="mt-6 surface-recessed rounded-xl p-4">
           <p className="text-xs font-semibold text-foreground-muted mb-3 uppercase tracking-wider">Demo accounts</p>
           <div className="space-y-1.5">
-            {DEMO_ACCOUNTS.map((demo) => (
+            {[
+              { label: "Admin", email: "admin@kinetic.enterprise", password: "Admin1234!" },
+              { label: "Worker — Marcus", email: "marcus@kinetic.enterprise", password: "Worker1234!" },
+              { label: "Worker — Sarah", email: "sarah@kinetic.enterprise", password: "Worker1234!" },
+            ].map((demo) => (
               <button
                 key={demo.email}
                 type="button"

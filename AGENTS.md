@@ -11,6 +11,9 @@ Real-time field workforce KPI dashboard (React 18 + Vite 5 + shadcn/ui + Zustand
 | `npm run lint` | ESLint on all `.ts/.tsx` |
 | `npm run test` | Vitest single run |
 | `npm run test:watch` | Vitest watch mode |
+| `npm run test -- <test-file>` | Run specific test file (e.g., `npm run test -- src/lib/kpi.test.ts`) |
+| `npm run test -- --reporter=verbose` | Run tests with verbose output |
+| `npm run test -- --watch` | Run tests in watch mode for specific files |
 
 No CI, no pre-commit hooks, no Docker.
 
@@ -61,7 +64,86 @@ src/
 - **Vitest** with jsdom, globals enabled (`describe/it/expect` available without import via `types: ["vitest/globals"]`).
 - **Test pattern**: `src/**/*.{test,spec}.{ts,tsx}`
 - **Setup**: `src/test/setup.ts` mocks `window.matchMedia` and imports `@testing-library/jest-dom`.
+- **Running specific tests**: Use `npm run test -- src/path/to/test-file.test.ts`
 - Current coverage is a single placeholder test. No coverage reporting configured.
+
+## Code Style Guidelines
+
+### Imports
+1. **Order**: 
+   - External libraries (react, etc.)
+   - Absolute path aliases (@/...)
+   - Relative paths (./../)
+2. **Formatting**:
+   - No unused imports (ESLint rule is off but maintain cleanliness)
+   - Group similar imports together
+   - One import per line
+   - Default imports first, then named imports
+
+### Formatting
+- **Indentation**: 2 spaces (no tabs)
+- **Quotes**: Single quotes for strings
+- **Semicolons**: Required
+- **Trailing commas**: Used in object literals, arrays, function parameters
+- **Line length**: Aim for 80-100 characters, but prioritize readability
+- **Function parameters**: Each on new line if more than 2 parameters
+- **JSX**: Self-closing tags when no children, proper indentation
+
+### Types & Interfaces
+- **Naming**: Use `interface` for object shapes, `type` for unions/mappings
+- **Export**: Export types from `src/lib/types.ts` for shared usage
+- **Optional properties**: Use `?` marker, not `undefined | Type`
+- **Enums**: Prefer union types (`"admin" | "worker"`) over actual enums
+- **Generics**: Use when appropriate for reusable components
+
+### Naming Conventions
+- **Components**: PascalCase (e.g., `WorkerDashboard.tsx`)
+- **Hooks**: camelCase with `use` prefix (e.g., `useVisits.ts`)
+- **Functions**: camelCase (e.g., `calculateKPI()`)
+- **Variables**: camelCase (e.g., `dailyVisitCount`)
+- **Constants**: UPPER_SNAKE_CASE (e.g., `MAX_RETRIES`)
+- **Files**: 
+  - Components: PascalCase.tsx
+  - Hooks: kebab-case.ts
+  - Utilities: kebab-case.ts
+  - Tests: kebab-case.test.ts or kebab-case.spec.ts
+
+### Error Handling
+- **Async operations**: Use try/catch with meaningful error messages
+- **Validation**: Validate inputs early with clear error conditions
+- **User feedback**: Use toast/error boundaries for user-facing errors
+- **Logging**: Console errors only in development; avoid in production
+- **Boundary components**: Use `ErrorBoundary` component for graceful degradation
+
+### React Specific
+- **Component structure**: 
+  - Export default for pages
+  - Named exports for reusable components
+- **Props**: 
+  - Destructure in function signature
+  - Use explicit PropTypes or TypeScript interfaces
+  - Default props when appropriate
+- **State**: 
+  - Prefer Zustand for global state
+  - Use useState/local state for component-specific state
+  - Avoid deep nesting in state objects
+- **Effects**: 
+  - Clean up subscriptions/timers
+  - Specify dependency arrays explicitly
+  - Avoid useEffect for data fetching (store handles this)
+
+### shadcn/ui Specific
+- **Usage**: Import from `@/components/ui/*`
+- **Customization**: Modify via `index.css` CSS variables
+- **Extension**: Create wrapper components when needed (don't modify ui/* directly)
+- **Consistency**: Use existing variants and sizes from the library
+
+### Zustand Store Patterns
+- **Structure**: Separate slices for different domains (auth, visits, sites, etc.)
+- **Immutability**: Treat state as immutable despite using mutate
+- **Selectors**: Create specific selectors in store.ts for derived data
+- **Actions**: Keep actions small and focused
+- **Persistence**: Not implemented (client-side only)
 
 ## Gotchas
 - **Dual lockfiles**: Both `bun.lock`/`bun.lockb` and `package-lock.json` exist. Use `npm` to stay consistent with `package-lock.json`.
@@ -69,6 +151,8 @@ src/
 - **No persistence**: All mutations are in-memory. Tests or demos that add/remove data will reset on refresh.
 - **`@tanstack/react-query` is mounted but unused**: Don't assume data flows through queries.
 - **`next-themes` is a dependency but dark mode toggle is not wired up**: Dark mode CSS vars exist but there's no runtime toggle.
+- **Two toast systems**: `sonner` (most pages) and shadcn `use-toast` (WorkerDetailDrawer) - both mounted in App.tsx
+- **React Query**: Configured but not used for data fetching (store handles state)
 
 ## Landing the Plane (Session Completion)
 

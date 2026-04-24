@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { persist, createJSONStorage } from "zustand/middleware";
 import { Role, Site, Visit, Worker } from "./types";
 import { admin, DEFAULT_DAILY_VISITS, sites as seedSites, visits as seedVisits, workers as seedWorkers } from "./mock-data";
 
@@ -45,12 +46,14 @@ const adminUser: SessionUser = {
   id: admin.id, name: admin.name, email: admin.email, avatar: admin.avatar, role: "admin", title: admin.role,
 };
 
-export const useApp = create<AppState>((set, get) => ({
-  user: null,
-  workers: seedWorkers,
-  sites: seedSites,
-  visits: seedVisits,
-  dailyVisitsTarget: DEFAULT_DAILY_VISITS,
+export const useApp = create<AppState>()(
+  persist(
+    (set, get) => ({
+      user: null,
+      workers: seedWorkers,
+      sites: seedSites,
+      visits: seedVisits,
+      dailyVisitsTarget: DEFAULT_DAILY_VISITS,
 
   setUser: (user) => set({ user }),
   loginAs: (role, workerId) => {
@@ -93,5 +96,17 @@ export const useApp = create<AppState>((set, get) => ({
     set({ workers: get().workers.map(w => (w.id === id ? { ...w, ...patch } : w)) }),
   removeWorker: (id) => set({ workers: get().workers.filter(w => w.id !== id) }),
 
-  setDailyVisitsTarget: (n) => set({ dailyVisitsTarget: n }),
-}));
+      setDailyVisitsTarget: (n) => set({ dailyVisitsTarget: n }),
+    }),
+    {
+      name: "fft-store",
+      storage: createJSONStorage(() => localStorage),
+      partialize: (s) => ({
+        workers: s.workers,
+        sites: s.sites,
+        visits: s.visits,
+        dailyVisitsTarget: s.dailyVisitsTarget,
+      }),
+    }
+  )
+);

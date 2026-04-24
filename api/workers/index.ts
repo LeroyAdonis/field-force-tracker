@@ -1,6 +1,7 @@
-import { requireAuthNode, requireRoleNode, sendJson } from "../../src/lib/api/middleware.js";
-import { db, worker, userRole } from "../../src/lib/db/index.js";
+import { requireAuthNode, requireRoleNode, readJsonBody, sendJson } from "../../src/lib/api/middleware.js";
+import { db, worker, userRole, user } from "../../src/lib/db/index.js";
 import { eq } from "drizzle-orm";
+import { randomUUID } from "crypto";
 import type { IncomingMessage, ServerResponse } from "http";
 
 export default async function handler(req: IncomingMessage, res: ServerResponse): Promise<void> {
@@ -39,8 +40,73 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     }
 
     if (req.method === "POST") {
-      await requireRoleNode(req, ["admin"]);
-      return send(400, { error: "Use invitation flow to create workers" });
+      const admin = await requireRoleNode(req, ["admin"]);
+      const body = await readJsonBody(req);
+      const { email, displayName, jobTitle, dailyKmTarget, avatar } = body as {
+        email?: string;
+        displayName?: string;
+        jobTitle?: string;
+        dailyKmTarget?: number;
+        avatar?: string;
+      };
+
+      if (!email || !displayName || !jobTitle) {
+        return send(400, { error: "email, displayName, and jobTitle are required" });
+      }
+
+      const existingUser = await db.query.user.findFirst({ where: eq(user.email, email) });
+      if (existingUser) {
+        return send(409, { error: "A user with this email already exists" });
+      }
+
+      const nowIso = new Date().toISOString();
+      const userId = randomUUID();
+      const userRoleId = randomUUID();
+      const workerId = randomUUID();
+
+      await db.insert(user).values({
+        id: userId,
+        email,
+        name: displayName,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+      });
+
+      await db.insert(userRole).values({
+        id: userRoleId,
+        userId,
+        role: "worker",
+        displayName,
+        avatar: avatar || `https://i.pravatar.cc/120?u=${userId}`,
+        active: true,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+      });
+
+      await db.insert(worker).values({
+        id: workerId,
+        userRoleId,
+        jobTitle,
+        dailyKmTarget: dailyKmTarget ?? 60,
+        active: true,
+        isDemo: false,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+      });
+
+      return send(201, {
+        id: workerId,
+        userId,
+        email,
+        displayName,
+        avatar: avatar || `https://i.pravatar.cc/120?u=${userId}`,
+        jobTitle,
+        dailyKmTarget: dailyKmTarget ?? 60,
+        active: true,
+        isDemo: false,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+      });
     }
 
     return send(405, { error: "Method not allowed" });

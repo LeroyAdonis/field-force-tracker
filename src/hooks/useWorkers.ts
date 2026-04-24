@@ -15,7 +15,7 @@ export interface WorkerData {
 
 const mapWorker = (w: Worker): WorkerData => ({
   id: w.id,
-  userId: w.id, // Assuming same for now
+  userId: w.id,
   email: w.email,
   displayName: w.name,
   avatar: w.avatar,
@@ -38,15 +38,61 @@ export function useWorker(id: string) {
 
 export function useAddWorker() {
   const addWorker = useApp((s) => s.addWorker);
-  return { mutate: (worker: Omit<Worker, "id">) => addWorker(worker), isLoading: false };
+  return {
+    mutate: async (data: Omit<WorkerData, "id" | "userId" | "isDemo">) => {
+      const res = await fetch("/api/workers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Failed to add worker");
+      }
+      const created = await res.json();
+      addWorker({
+        name: created.displayName,
+        email: created.email,
+        role: created.jobTitle,
+        avatar: created.avatar,
+        dailyKmTarget: created.dailyKmTarget,
+        active: created.active,
+      });
+    },
+    isPending: false,
+  };
 }
 
 export function useUpdateWorker() {
   const updateWorker = useApp((s) => s.updateWorker);
-  return { mutate: ({ id, updates }: { id: string; updates: Partial<Worker> }) => updateWorker(id, updates), isLoading: false };
+  return {
+    mutate: async ({ id, updates }: { id: string; updates: Partial<Worker> }) => {
+      const res = await fetch(`/api/workers/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updates),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Failed to update worker");
+      }
+      updateWorker(id, updates);
+    },
+    isPending: false,
+  };
 }
 
 export function useDeleteWorker() {
   const removeWorker = useApp((s) => s.removeWorker);
-  return { mutate: removeWorker, isLoading: false };
+  return {
+    mutate: async (id: string) => {
+      const res = await fetch(`/api/workers/${id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Failed to delete worker");
+      }
+      removeWorker(id);
+    },
+    isPending: false,
+  };
 }

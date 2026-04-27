@@ -1,0 +1,8 @@
+- [x] vercel-practices. Apply vercel-react-best-practices skill for performance optimization
+- [x] error-handling. Improve error states and loading UX throughout the app
+- [ ] tests-write. Add unit/integration tests for new API service and auth flows
+- [ ] mock-remove. Remove mock data fallback once API is verified working
+- [x] env-setup. Add VITE_API_URL to environment variables
+- [x] logout-impl. Implement logout functionality in header/user menu
+- [x] skeleton-ui. Add skeleton components for better loading states
+- [x] api-error-handling. Enhance API service with error handling callbacks

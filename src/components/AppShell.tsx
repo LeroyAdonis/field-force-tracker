@@ -27,6 +27,7 @@ export function AppShell({ children }: Props) {
   const { user, logout } = useApp();
   const navigate = useNavigate();
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
 
   if (!user) return null;
   const items = user.role === "admin" ? adminNav : workerNav;
@@ -42,6 +43,7 @@ export function AppShell({ children }: Props) {
 
   const handleSheetNavigate = (href: string) => {
     navigate(href);
+    setSheetOpen(false);
   };
 
   return (
@@ -103,9 +105,20 @@ export function AppShell({ children }: Props) {
           <div className="hidden lg:block label-eyebrow">
             {user.role === "admin" ? "Command Center · Admin" : "Field Operations Console"}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 relative">
             <NotificationPopover />
-            <img src={user.avatar} alt={user.name} className="h-8 w-8 rounded-full object-cover lg:hidden" />
+            <div className="relative" onClick={() => setUserMenuOpen(!userMenuOpen)}>
+              <img src={user.avatar} alt={user.name} className="h-8 w-8 rounded-full object-cover cursor-pointer lg:hidden" />
+              {userMenuOpen && (
+                <div className="absolute right-0 mt-2 w-48 bg-popover border border-border/50 shadow-lg rounded-xl z-50 w-48">
+                  <div className="space-y-1 px-3 py-2 text-sm">
+                    <button onClick={onLogout} className="w-full text-left p-2 rounded hover:bg-surface-high transition-colors">
+                      <LogOut className="mr-2 h-4 w-4" /> Sign Out
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </header>
 

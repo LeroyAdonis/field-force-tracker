@@ -3,12 +3,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2, MapPin } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
 
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const { login, isLoading: authLoading } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -16,21 +18,18 @@ export default function Login() {
     setLoading(true);
 
     try {
-      const res = await fetch("/api/auth/sign-in/email", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password, rememberMe: true }),
-      });
-
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        setError(data?.message || data?.error || "Invalid email or password.");
+      const result = await login({ email, password });
+      
+      if (!result.success) {
+        // Better Auth returns error in result.error
+        setError(result.error?.message || "Invalid email or password");
         return;
       }
 
+      // On success, redirect to home page
       window.location.href = "/";
-    } catch {
-      setError("Network error — please try again.");
+    } catch (err) {
+      setError("Network error — please try again");
     } finally {
       setLoading(false);
     }
@@ -64,7 +63,7 @@ export default function Login() {
               onChange={(e) => setEmail(e.target.value)}
               required
               autoComplete="email"
-              disabled={loading}
+              disabled={loading || authLoading}
             />
           </div>
 
@@ -78,13 +77,13 @@ export default function Login() {
               onChange={(e) => setPassword(e.target.value)}
               required
               autoComplete="current-password"
-              disabled={loading}
+              disabled={loading || authLoading}
             />
           </div>
 
-          <Button type="submit" className="w-full" disabled={loading}>
-            {loading && <Loader2 className="h-4 w-4 animate-spin" />}
-            {loading ? "Signing in…" : "Sign In"}
+          <Button type="submit" className="w-full" disabled={loading || authLoading}>
+            {(loading || authLoading) && <Loader2 className="h-4 w-4 animate-spin" />}
+            {(loading || authLoading) ? "Signing in…" : "Sign In"}
           </Button>
         </form>
 

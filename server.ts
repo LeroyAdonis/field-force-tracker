@@ -24,7 +24,7 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 });
 
 // Auth handler registered before express.json()
-app.all("/api/auth/*", toNodeHandler(auth));
+app.use("/api/auth", toNodeHandler(auth));
 
 app.use(express.json());
 
@@ -34,18 +34,14 @@ app.use(async (req: Request, res: Response) => {
     const proxyUrl = new URL(req.url || "/", VITE_URL).toString();
     const proxyReq = await fetch(proxyUrl, {
       method: req.method,
-      headers: {
-        ...(req.headers as Record<string, string>),
-        host: `localhost:${VITE_PORT}`,
-      } as HeadersInit,
+      headers: req.headers,
       body: ["GET", "HEAD"].includes(req.method || "") ? undefined : JSON.stringify(req.body),
     });
 
     res.status(proxyReq.status);
-    const headers = Object.fromEntries(proxyReq.headers);
-    for (const [key, value] of Object.entries(headers)) {
-      res.setHeader(key, value as string);
-    }
+    proxyReq.headers.forEach((value, key) => {
+      res.setHeader(key, value);
+    });
     const proxyBody = await proxyReq.arrayBuffer();
     res.end(Buffer.from(proxyBody));
   } catch (error) {

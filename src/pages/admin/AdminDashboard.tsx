@@ -72,7 +72,7 @@ export default function AdminDashboard() {
           <h1 className="text-4xl xl:text-5xl font-extrabold mt-1 leading-[1.05]">Operational Pulse</h1>
           <p className="text-foreground-muted mt-2 max-w-xl">Real-time oversight for site operations, workforce KPIs, and safety protocols.</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 md:gap-4">
           <span className="text-xs text-foreground-muted tabular-nums">Last updated: {lastUpdated}</span>
           <Button variant="ghost" size="icon" onClick={handleRefresh} title="Refresh data">
             <RefreshCw className="h-4 w-4" />
@@ -80,7 +80,7 @@ export default function AdminDashboard() {
           <Button variant="secondary" size="lg" asChild>
             <Link to="/admin/reports"><FileBarChart className="h-4 w-4" /> View Reports</Link>
           </Button>
-          <Button variant="primary" size="lg" asChild>
+          <Button variant="primary" size="lg" asChild className="whitespace-nowrap">
             <Link to="/admin/workforce"><UserPlus className="h-4 w-4" /> Manage Workers</Link>
           </Button>
         </div>

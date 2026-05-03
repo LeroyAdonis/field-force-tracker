@@ -1,18 +1,15 @@
 import { betterAuth } from "better-auth";
-import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { db } from "@/db";
-import { users, sessions, accounts, verifications } from "@/db/schema";
+import { Pool } from "pg";
+
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+});
 
 export const auth = betterAuth({
-  database: drizzleAdapter(db, {
-    provider: "pg",
-    schema: {
-      user: users,
-      session: sessions,
-      account: accounts,
-      verification: verifications,
-    },
-  }),
+  database: {
+    db: pool,
+    type: "postgres",
+  },
   emailAndPassword: {
     enabled: true,
     requireEmailVerification: false,
@@ -31,7 +28,10 @@ export const auth = betterAuth({
       },
     },
   },
-  trustedOrigins: [process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"],
+  trustedOrigins: [
+    process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
+    process.env.BETTER_AUTH_URL || "http://localhost:3000",
+  ],
 });
 
 export type Session = typeof auth.$Infer.Session;
